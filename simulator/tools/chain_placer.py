@@ -9,7 +9,9 @@ from simulator.typing import ChainSize
 
 class ChainPlacer:
     def __init__(self, chain_size: int, spacing: float) -> None:
-        self.current_chain = np.empty((0, 2), dtype=np.float32)
+        self.current_chain: np.ndarray[tuple[int, Literal[2]]] = np.empty(
+            (0, 2), dtype=np.float32
+        )
 
         self.chain_size = chain_size
         self.spacing = spacing

@@ -3,7 +3,8 @@ from typing import Literal, Protocol
 
 import numpy as np
 
-from simulator.typing import ChainIdx, Chains
+from simulator.persistence import Chain
+from simulator.typing import ChainIdx
 
 
 @dataclass
@@ -16,7 +17,7 @@ class LightEffect(Protocol):
     def calculate_chain_brightness(
         self,
         delta_time: float,
-        chains: Chains,
+        chains: list[Chain],
         cattail_context: CattailContext,
     ) -> np.ndarray[tuple[ChainIdx]]:
         raise NotImplementedError
@@ -29,7 +30,7 @@ class TestLightEffect(LightEffect):
     def calculate_chain_brightness(
         self,
         delta_time: float,
-        chains: Chains,
+        chains: list[Chain],
         cattail_context: CattailContext,
     ) -> np.ndarray[tuple[ChainIdx]]:
         self.accumulated_time += delta_time

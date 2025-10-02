@@ -1,30 +1,31 @@
-from typing import Literal
-
 import numpy as np
 from imgui_bundle import imgui, implot
 
 from simulator.helpers import ndarray_to_scatter_many, point_to_ndarray
 from simulator.light_effect import CattailContext, LightEffect
-from simulator.typing import Chains
+from simulator.persistence import Cattail, Chain
 
 
 class Simulator:
     def __init__(
         self,
-        chains: Chains,
-        cattail_centers: np.ndarray[tuple[int, Literal[2]]],
+        chains: list[Chain],
+        cattails: list[Cattail],
         light_effect: LightEffect | None = None,
         cattail_spring_constant=5.0,
         cattail_damping=0.3,
-    ) -> None:
+    ):
         self.cattail_spring_constant = cattail_spring_constant
         self.cattail_damping = cattail_damping
 
         self.chains = chains
 
-        self.cattail_centers = cattail_centers
-        self.cattail_positions = cattail_centers.copy()
-        self.cattail_velocities = np.zeros(cattail_centers.shape, dtype=np.float32)
+        if cattails:
+            self.cattail_centers = np.stack([cattail.pos for cattail in cattails])
+        else:
+            self.cattail_centers = np.empty((0, 2), dtype=np.float32)
+        self.cattail_positions = self.cattail_centers.copy()
+        self.cattail_velocities = np.zeros(self.cattail_centers.shape, dtype=np.float32)
 
         self.light_effect = light_effect
 
@@ -34,12 +35,14 @@ class Simulator:
         pos = point_to_ndarray(implot.get_plot_mouse_pos())
         displacements_from_cursor = self.cattail_positions - pos
         distances_from_cursor = np.linalg.vector_norm(displacements_from_cursor, axis=1)
+        valid = distances_from_cursor > 1e-6
         directions_from_cursor = (
-            displacements_from_cursor / distances_from_cursor[:, np.newaxis]
+            displacements_from_cursor[valid]
+            / distances_from_cursor[valid][:, np.newaxis]
         )
-        accelerations += (
+        accelerations[valid] += (
             directions_from_cursor
-            * np.maximum(0.5 - distances_from_cursor, 0)[:, np.newaxis]
+            * np.maximum(0.5 - distances_from_cursor[valid], 0)[:, np.newaxis]
         )
 
         distance_from_centers = self.cattail_positions - self.cattail_centers
@@ -82,7 +85,7 @@ class Simulator:
                     )
                     implot.plot_scatter(
                         "chain_brightness",
-                        *ndarray_to_scatter_many(chain),
+                        *ndarray_to_scatter_many(chain.points),
                     )
             except Exception as e:
                 print(f"Error in light effect: {e}")

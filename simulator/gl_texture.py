@@ -16,9 +16,8 @@ class GlTexture:
         return np.array([self.w, self.h], dtype=np.float32)
 
     @staticmethod
-    def load_texture_rgba(path: str):
+    def load_texture_rgba(img: Image.Image):
         # Load with Pillow and upload to GL texture. Must be called AFTER GL context is created.
-        img = Image.open(path).convert("RGBA")
         rgba = np.array(img, dtype=np.uint8)  # H x W x 4
         h, w = rgba.shape[:2]
 
