@@ -34,10 +34,6 @@ def display_cattails(cattails: list[Cattail]):
     )
 
 
-def light_effect():
-    return TestLightEffect()
-
-
 class InProjectGui:
     def __init__(self, persistence: Persistence, chain_size=5):
         self.texture = None
@@ -54,6 +50,19 @@ class InProjectGui:
         self.location_id: int | None = self.persistence.get_location_id()
 
         self.change_in_scale = None
+
+        self.selected_light_effect_name = None
+
+    @property
+    def light_effects(self):
+        return {
+            "Test": TestLightEffect(),
+        }
+
+    @property
+    def selected_light_effect(self):
+        if self.selected_light_effect_name is not None:
+            return self.light_effects[self.selected_light_effect_name]
 
     @property
     def axes_limits(self):
@@ -148,7 +157,7 @@ class InProjectGui:
                     self.simulator = Simulator(
                         chains=self.chains,
                         cattails=self.cattails,
-                        light_effect=light_effect(),
+                        light_effect=self.selected_light_effect,
                     )
                 self.simulator.gui(imgui.get_io().delta_time)
             else:
@@ -199,6 +208,11 @@ class InProjectGui:
                 self.tool = "place_chain"
             if imgui.radio_button("Place cattail", self.tool == "place_cattail"):
                 self.tool = "place_cattail"
+
+        with imgui_ctx.begin("Light Effect"):
+            for name in self.light_effects.keys():
+                if imgui.radio_button(name, self.selected_light_effect_name == name):
+                    self.selected_light_effect_name = name
 
 
 class ProjectPicker:
