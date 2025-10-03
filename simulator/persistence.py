@@ -108,19 +108,13 @@ class Persistence:
                 BytesIO(row[0]),
             )
 
-    def get_scale(self, location_id: int) -> float | None:
+    def get_scale(self, location_id: int) -> Scale | None:
         row = self.conn.execute(
             "SELECT scale FROM location WHERE id = ?",
             (location_id,),
         ).fetchone()
         if row is not None:
             return row[0]
-
-    def set_scale(self, location_id: int, scale: Scale):
-        self.conn.execute(
-            "UPDATE location SET scale = ? WHERE id = ?",
-            (scale, location_id),
-        )
 
     def get_chains(self, location_id: int) -> list[Chain[int]]:
         rows = self.conn.execute(
@@ -165,18 +159,6 @@ class Persistence:
             "INSERT INTO cattails(location_id, x, y) VALUES(?, ?, ?)",
             (location_id, *cattail.pos.tolist()),
         )
-
-    def set_scale_and_rescale(self, location_id: int, scale: Scale):
-        old_scale = self.get_scale(location_id)
-        assert old_scale is not None
-        factor = scale / old_scale
-        for chain in self.get_chains(location_id):
-            chain.points /= factor
-            self.update_chain(chain)
-        for cattail in self.get_cattails(location_id):
-            cattail.pos /= factor
-            self.update_cattail(cattail)
-        self.set_scale(location_id, scale)
 
     def close(self):
         self.conn.close()

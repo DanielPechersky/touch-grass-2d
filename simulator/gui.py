@@ -101,8 +101,6 @@ class InProjectGui:
 
         self.location_id: int | None = self.persistence.get_location_id()
 
-        self.change_in_scale = None
-
         self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
 
     @property
@@ -177,12 +175,9 @@ class InProjectGui:
         ):
             implot.setup_axes("x (metres)", "y (metres)")
 
-            cond = (
-                imgui.Cond_.once if self.change_in_scale is None else imgui.Cond_.always
-            )
             axes = self.axes_limits
             if axes is not None:
-                implot.setup_axes_limits(*axes, cond=cond)
+                implot.setup_axes_limits(*axes)
 
             implot.plot_image(
                 "img",
@@ -193,11 +188,6 @@ class InProjectGui:
                     self.texture.h / self.scale,
                 ),
             )
-
-            if self.change_in_scale is not None:
-                self.persistence.set_scale_and_rescale(
-                    self.location_id, self.change_in_scale
-                )
 
             if self.tool == "view":
                 if self.simulator is None:
