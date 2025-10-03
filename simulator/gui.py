@@ -34,11 +34,63 @@ def display_cattails(cattails: list[Cattail]):
     )
 
 
+class AddImageGui:
+    def __init__(self, persistence: Persistence):
+        self.persistence = persistence
+        self.image = None
+        self.texture = None
+        self.measurer = None
+
+    def gui(self) -> tuple[Image.Image, float] | None:
+        if self.image is None:
+            imgui.text("Select a map image")
+            if imgui.button("Open Image"):
+                img_path = portable_file_dialogs.open_file(
+                    "Select a map image",
+                    default_path=".",
+                    filters=["Image files", "*.png *.jpg *.jpeg *.bmp"],
+                ).result()
+                match img_path:
+                    case [img_path]:
+                        self.image = Image.open(img_path).convert("RGBA")
+                    case _:
+                        pass
+            return
+
+        if self.texture is None:
+            self.texture = GlTexture.load_texture_rgba(self.image)
+
+        size = imgui.ImVec2(800, 600)
+        with implot_begin_plot(
+            "Set the scale by picking two points and inputting the distance between them",
+            size,
+            flags=implot.Flags_.no_legend | implot.Flags_.equal,
+        ):
+            implot.setup_axes("x (pixels)", "y (pixels)")
+
+            implot.plot_image(
+                "img",
+                imgui.ImTextureRef(self.texture.id),
+                implot.Point(0.0, 0.0),
+                implot.Point(
+                    self.texture.w,
+                    self.texture.h,
+                ),
+            )
+
+            if self.measurer is None or imgui.is_key_pressed(imgui.Key.escape):
+                self.measurer = Measurer()
+            scale = self.measurer.gui()
+            if scale is not None:
+                return self.image, scale
+
+
 class InProjectGui:
     def __init__(self, persistence: Persistence, chain_size=5):
         self.texture = None
-        self.tool: Literal["view", "measure", "place_chain", "place_cattail"] = "view"
+        self.tool: Literal["view", "place_chain", "place_cattail"] = "view"
 
+        self.add_image_gui: AddImageGui | None = None
         self.simulator: Simulator | None = None
         self.measurer: Measurer | None = None
         self.point_placer: ChainPlacer | None = None
@@ -102,22 +154,15 @@ class InProjectGui:
         self.disable_double_click_to_fit()
 
         if self.location_id is None:
-            imgui.text("Select a map image")
-            if imgui.button("Open Image"):
-                img_path = portable_file_dialogs.open_file(
-                    "Select a map image",
-                    default_path=".",
-                    filters=["Image files", "*.png *.jpg *.jpeg *.bmp"],
-                ).result()
-                match img_path:
-                    case [img_path]:
-                        img = Image.open(img_path).convert("RGBA")
-                        self.location_id = self.persistence.create_location(
-                            img, scale=1.0
-                        )
-                    case _:
-                        pass
+            if self.add_image_gui is None:
+                self.add_image_gui = AddImageGui(self.persistence)
+            result = self.add_image_gui.gui()
+            if result is not None:
+                img, scale = result
+                self.location_id = self.persistence.create_location(img, scale)
             return
+        else:
+            self.add_image_gui = None
 
         if self.texture is None:
             img = self.persistence.get_image(self.location_id)
@@ -125,8 +170,10 @@ class InProjectGui:
             self.texture = GlTexture.load_texture_rgba(img)
 
         size = imgui.ImVec2(800, 600)
-        if implot.begin_plot(
-            "Image plot", size, flags=implot.Flags_.no_legend | implot.Flags_.equal
+        with implot_begin_plot(
+            "Exhibit simulator",
+            size,
+            flags=implot.Flags_.no_legend | implot.Flags_.equal,
         ):
             implot.setup_axes("x (metres)", "y (metres)")
 
@@ -186,24 +233,9 @@ class InProjectGui:
                     new_cattail = Cattail(id=None, pos=new_cattail)
                     self.persistence.append_cattail(self.location_id, new_cattail)
 
-            self.change_in_scale = None
-            if self.tool == "measure":
-                if self.measurer is None or pressed_escape:
-                    self.measurer = Measurer()
-                new_scale = self.measurer.gui()
-                if new_scale is not None:
-                    self.change_in_scale = new_scale / self.scale
-                    self.persistence.set_scale_and_rescale(self.location_id, new_scale)
-            else:
-                self.measurer = None
-
-            implot.end_plot()
-
         with imgui_ctx.begin("Tools"):
             if imgui.radio_button("View", self.tool == "view"):
                 self.tool = "view"
-            if imgui.radio_button("Measure", self.tool == "measure"):
-                self.tool = "measure"
             if imgui.radio_button("Place chain", self.tool == "place_chain"):
                 self.tool = "place_chain"
             if imgui.radio_button("Place cattail", self.tool == "place_cattail"):
@@ -254,6 +286,15 @@ class ProjectPicker:
             match d.result():
                 case [path]:
                     return Persistence(path)
+
+
+@contextmanager
+def implot_begin_plot(*args, **kwargs):
+    if implot.begin_plot(*args, **kwargs):
+        try:
+            yield
+        finally:
+            implot.end_plot()
 
 
 @contextmanager
