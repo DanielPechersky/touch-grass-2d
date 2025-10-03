@@ -103,7 +103,7 @@ class InProjectGui:
 
         self.change_in_scale = None
 
-        self.selected_light_effect_name = None
+        self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
 
     @property
     def light_effects(self):
