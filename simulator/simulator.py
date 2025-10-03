@@ -1,3 +1,5 @@
+import traceback
+
 import numpy as np
 from imgui_bundle import imgui, implot
 
@@ -28,6 +30,8 @@ class Simulator:
         self.cattail_velocities = np.zeros(self.cattail_centers.shape, dtype=np.float32)
 
         self.light_effect = light_effect
+
+        self.light_effect_debug_gui = False
 
     def update_cattails(self, delta_time: float):
         accelerations = np.zeros(self.cattail_positions.shape, dtype=np.float32)
@@ -65,6 +69,8 @@ class Simulator:
 
         if self.light_effect is not None:
             try:
+                if self.light_effect_debug_gui:
+                    self.light_effect.debug_gui()
                 chain_brightness = self.light_effect.calculate_chain_brightness(
                     delta_time=delta_time,
                     chains=self.chains,
@@ -87,5 +93,11 @@ class Simulator:
                         "chain_brightness",
                         *ndarray_to_scatter_many(chain.points),
                     )
-            except Exception as e:
-                print(f"Error in light effect: {e}")
+            except Exception:
+                print("Error in light effect")
+                traceback.print_exc()
+
+    def tool_gui(self):
+        _, self.light_effect_debug_gui = imgui.checkbox(
+            "Light Effect Debug", self.light_effect_debug_gui
+        )

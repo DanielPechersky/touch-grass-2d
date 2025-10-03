@@ -8,7 +8,7 @@ from PIL import Image
 
 from simulator.gl_texture import GlTexture
 from simulator.helpers import ndarray_to_scatter_many, plot_chain
-from simulator.light_effect import TestLightEffect
+from simulator.light_effect import ProjectileLightEffect, TestLightEffect
 from simulator.persistence import Cattail, Chain, Persistence
 from simulator.simulator import Simulator
 from simulator.tools.cattail_placer import CattailPlacer
@@ -107,6 +107,7 @@ class InProjectGui:
     def light_effects(self):
         return {
             "Test": TestLightEffect(),
+            "Projectile": ProjectileLightEffect(),
         }
 
     @property
@@ -231,10 +232,16 @@ class InProjectGui:
             if imgui.radio_button("Place cattail", self.tool == "place_cattail"):
                 self.tool = "place_cattail"
 
+            imgui.separator()
+
+            if self.simulator is not None:
+                self.simulator.tool_gui()
+
         with imgui_ctx.begin("Light Effect"):
             for name in self.light_effects.keys():
                 if imgui.radio_button(name, self.selected_light_effect_name == name):
                     self.selected_light_effect_name = name
+                    self.simulator = None
 
 
 class ProjectPicker:
