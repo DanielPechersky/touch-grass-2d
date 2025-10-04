@@ -11,6 +11,7 @@ from simulator.helpers import ndarray_to_scatter_many, plot_chain
 from simulator.light_effect import (
     ProjectileLightEffect,
     PulseLightEffect,
+    PulseLightEffect2,
     TestLightEffect,
 )
 from simulator.persistence import Cattail, Chain, Persistence
@@ -115,6 +116,7 @@ class InProjectGui:
             "Test": TestLightEffect(),
             "Projectile": ProjectileLightEffect(),
             "Pulse": PulseLightEffect(),
+            "Pulse 2": PulseLightEffect2(),
         }
 
     @property
