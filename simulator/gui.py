@@ -60,6 +60,9 @@ class AddImageGui:
         if self.texture is None:
             self.texture = GlTexture.load_texture_rgba(self.image)
 
+        implot.create_context()
+        disable_double_click_to_fit()
+
         size = imgui.ImVec2(800, 600)
         with implot_begin_plot(
             "Set the scale by picking two points and inputting the distance between them",
@@ -86,11 +89,10 @@ class AddImageGui:
 
 
 class InProjectGui:
-    def __init__(self, persistence: Persistence, chain_size=5):
+    def __init__(self, persistence: Persistence, location_id: int, chain_size=5):
         self.texture = None
         self.tool: Literal["view", "place_chain", "place_cattail"] = "view"
 
-        self.add_image_gui: AddImageGui | None = None
         self.simulator: Simulator | None = None
         self.measurer: Measurer | None = None
         self.point_placer: ChainPlacer | None = None
@@ -99,7 +101,7 @@ class InProjectGui:
         self.persistence = persistence
         self.chain_size = chain_size
 
-        self.location_id: int | None = self.persistence.get_location_id()
+        self.location_id: int = location_id
 
         self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
 
@@ -126,20 +128,14 @@ class InProjectGui:
             0,
         )
 
-    def disable_double_click_to_fit(self):
-        map = implot.get_input_map()
-        map.fit = -1
-
     @property
     def scale(self):
-        assert self.location_id is not None
         scale = self.persistence.get_scale(self.location_id)
         assert scale is not None
         return scale
 
     @property
     def chains(self) -> list[Chain]:
-        assert self.location_id is not None
         chains = self.persistence.get_chains(self.location_id)
         assert chains is not None
         return chains
@@ -153,18 +149,7 @@ class InProjectGui:
 
     def gui(self):
         implot.create_context()
-        self.disable_double_click_to_fit()
-
-        if self.location_id is None:
-            if self.add_image_gui is None:
-                self.add_image_gui = AddImageGui(self.persistence)
-            result = self.add_image_gui.gui()
-            if result is not None:
-                img, scale = result
-                self.location_id = self.persistence.create_location(img, scale)
-            return
-        else:
-            self.add_image_gui = None
+        disable_double_click_to_fit()
 
         if self.texture is None:
             img = self.persistence.get_image(self.location_id)
@@ -247,6 +232,11 @@ class InProjectGui:
                     self.simulator = None
 
 
+def disable_double_click_to_fit():
+    map = implot.get_input_map()
+    map.fit = -1
+
+
 class ProjectPicker:
     def __init__(self):
         self.selected_folder: Path = Path(".").absolute()
@@ -311,6 +301,7 @@ class Gui:
         self.persistence: Persistence | None = None
 
         self.project_picker: ProjectPicker | None = None
+        self.add_image_gui: AddImageGui | None = None
         self.in_project_gui: InProjectGui | None = None
 
     def gui(self):
@@ -319,8 +310,22 @@ class Gui:
             if self.project_picker is None:
                 self.project_picker = ProjectPicker()
             self.persistence = self.project_picker.gui()
+            return
         else:
             self.project_picker = None
-            if self.in_project_gui is None:
-                self.in_project_gui = InProjectGui(self.persistence)
-            self.in_project_gui.gui()
+
+        location_id = self.persistence.get_location_id()
+        if location_id is None:
+            if self.add_image_gui is None:
+                self.add_image_gui = AddImageGui(self.persistence)
+            result = self.add_image_gui.gui()
+            if result is not None:
+                img, scale = result
+                self.location_id = self.persistence.create_location(img, scale)
+            return
+        else:
+            self.add_image_gui = None
+
+        if self.in_project_gui is None:
+            self.in_project_gui = InProjectGui(self.persistence, location_id)
+        self.in_project_gui.gui()
