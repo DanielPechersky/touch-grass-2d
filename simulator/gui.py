@@ -8,7 +8,11 @@ from PIL import Image
 
 from simulator.gl_texture import GlTexture
 from simulator.helpers import ndarray_to_scatter_many, plot_chain
-from simulator.light_effect import ProjectileLightEffect, TestLightEffect
+from simulator.light_effect import (
+    ProjectileLightEffect,
+    PulseLightEffect,
+    TestLightEffect,
+)
 from simulator.persistence import Cattail, Chain, Persistence
 from simulator.simulator import Simulator
 from simulator.tools.cattail_placer import CattailPlacer
@@ -110,6 +114,7 @@ class InProjectGui:
         return {
             "Test": TestLightEffect(),
             "Projectile": ProjectileLightEffect(),
+            "Pulse": PulseLightEffect(),
         }
 
     @property
