@@ -132,18 +132,21 @@ class InProjectGui:
 
     @property
     def scale(self):
+        assert self.location_id is not None
         scale = self.persistence.get_scale(self.location_id)
         assert scale is not None
         return scale
 
     @property
     def chains(self) -> list[Chain]:
+        assert self.location_id is not None
         chains = self.persistence.get_chains(self.location_id)
         assert chains is not None
         return chains
 
     @property
     def cattails(self) -> list[Cattail]:
+        assert self.location_id is not None
         cattails = self.persistence.get_cattails(self.location_id)
         assert cattails is not None
         return cattails

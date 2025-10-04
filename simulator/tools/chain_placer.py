@@ -4,14 +4,13 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 from simulator.helpers import ndarray_to_scatter, plot_chain, point_to_ndarray
-from simulator.typing import ChainSize
 
 
 class ChainPlacer:
     def __init__(self, chain_size: int, spacing: float) -> None:
-        self.current_chain: np.ndarray[tuple[int, Literal[2]]] = np.empty(
-            (0, 2), dtype=np.float32
-        )
+        self.current_chain: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
 
         self.chain_size = chain_size
         self.spacing = spacing
@@ -47,7 +46,7 @@ class ChainPlacer:
         vec *= self.spacing
         return self.last_placed_point + vec
 
-    def gui(self) -> np.ndarray[tuple[ChainSize, Literal[2]]] | None:
+    def gui(self) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] | None:
         plot_chain(
             "new_chain", self.current_chain, color=imgui.ImVec4(0.0, 0.8, 0.0, 1.0)
         )
@@ -66,5 +65,5 @@ class ChainPlacer:
 
         if self.current_chain_length == self.chain_size:
             result = self.current_chain
-            self.current_chain = np.empty((0, 2), dtype=np.float32)
+            self.current_chain = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
             return result

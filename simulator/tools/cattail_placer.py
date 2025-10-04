@@ -17,7 +17,7 @@ class CattailPlacer:
 
         return point_to_ndarray(implot.get_plot_mouse_pos())
 
-    def gui(self) -> np.ndarray[tuple[Literal[2]]] | None:
+    def gui(self) -> np.ndarray[tuple[Literal[2]], np.dtype[np.floating]] | None:
         if self.previewed_point is None:
             return None
 

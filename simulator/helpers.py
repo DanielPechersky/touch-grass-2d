@@ -4,20 +4,26 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 
-def point_to_ndarray(point: implot.Point) -> np.ndarray:
+def point_to_ndarray(
+    point: implot.Point,
+) -> np.ndarray[tuple[Literal[2]], np.dtype[np.floating]]:
     return np.array([point.x, point.y], dtype=np.float32)
 
 
-def ndarray_to_scatter(array: np.ndarray):
+def ndarray_to_scatter(array: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]]):
     return array[0, np.newaxis], array[1, np.newaxis]
 
 
-def ndarray_to_scatter_many(array: np.ndarray[tuple[int, Literal[2]]]):
+def ndarray_to_scatter_many(
+    array: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+):
     return np.ascontiguousarray(array[:, 0]), np.ascontiguousarray(array[:, 1])
 
 
 def plot_chain(
-    label_id: str, chain: np.ndarray[tuple[int, Literal[2]]], color: imgui.ImVec4
+    label_id: str,
+    chain: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+    color: imgui.ImVec4,
 ):
     implot.set_next_marker_style(fill=color)
     implot.plot_scatter(

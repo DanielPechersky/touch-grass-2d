@@ -1,30 +1,36 @@
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 import numpy as np
 from imgui_bundle import imgui, implot
 
 from simulator.helpers import ndarray_to_scatter_many
 from simulator.persistence import Chain
-from simulator.typing import ChainIdx
 
 
 @dataclass
 class CattailContext:
-    centers: np.ndarray[tuple[int, Literal[2]]]
-    accelerations: np.ndarray[tuple[int, Literal[2]]]
+    centers: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
+    accelerations: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
 
 
 class LightEffect(Protocol):
     def calculate_chain_brightness(
         self,
         delta_time: float,
-        chains: list[Chain],
+        chains: list[Chain[Any]],
         cattail_context: CattailContext,
-    ) -> np.ndarray[tuple[ChainIdx]]:
+    ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
+        """
+        Returns an ndarray of shape (len(chains),) with values in [0, 1].
+        """
         raise NotImplementedError
 
     def debug_gui(self):
+        """
+        Optional GUI for debugging purposes.
+        Implement this method if you want to visualize the internal state of a light effect.
+        """
         pass
 
 
@@ -34,10 +40,10 @@ class TestLightEffect(LightEffect):
 
     def calculate_chain_brightness(
         self,
-        delta_time: float,
-        chains: list[Chain],
-        cattail_context: CattailContext,
-    ) -> np.ndarray[tuple[ChainIdx]]:
+        delta_time,
+        chains,
+        cattail_context,
+    ):
         self.accumulated_time += delta_time
 
         total_acceleration = np.linalg.vector_norm(
@@ -67,25 +73,25 @@ class ProjectileLightEffect(LightEffect):
 
         self.accumulated_time = 0.0
 
-        self.exhausted: np.ndarray[tuple[int], np.dtypes.BoolDType] = np.zeros(
+        self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
             (0,), dtype=bool
         )
-        self.projectile_start_times: np.ndarray[tuple[int], np.dtypes.Float32DType] = (
+        self.projectile_start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = (
             np.zeros((0,), dtype=np.float32)
         )
         self.projectile_positions: np.ndarray[
-            tuple[int, Literal[2]], np.dtypes.Float32DType
-        ] = np.zeros((0, 2), dtype=np.float32)
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
         self.projectile_velocities: np.ndarray[
-            tuple[int, Literal[2]], np.dtypes.Float32DType
-        ] = np.zeros((0, 2), dtype=np.float32)
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
 
     def calculate_chain_brightness(
         self,
-        delta_time: float,
-        chains: list[Chain],
-        cattail_context: CattailContext,
-    ) -> np.ndarray[tuple[ChainIdx]]:
+        delta_time,
+        chains,
+        cattail_context,
+    ):
         self.accumulated_time += delta_time
 
         if len(self.exhausted) != len(cattail_context.centers):
@@ -117,8 +123,8 @@ class ProjectileLightEffect(LightEffect):
 
     def add_new_projectiles(
         self,
-        new_positions: np.ndarray[tuple[int, Literal[2]]],
-        new_velocities: np.ndarray[tuple[int, Literal[2]]],
+        new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+        new_velocities: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
     ):
         self.projectile_start_times = np.concatenate(
             (
@@ -145,7 +151,7 @@ class ProjectileLightEffect(LightEffect):
     def chain_brightness_from_projectiles(
         self,
         chains: list[Chain],
-    ) -> np.ndarray[tuple[ChainIdx]]:
+    ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
         brightness = np.zeros((len(chains),), dtype=np.float32)
 
         for projectile_pos in self.projectile_positions:

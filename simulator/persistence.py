@@ -18,13 +18,13 @@ Pixels per metre
 @dataclass
 class Chain[Id]:
     id: Id
-    points: np.ndarray[tuple[int, Literal[2]], np.dtypes.Float32DType]
+    points: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
 
 
 @dataclass
 class Cattail[Id]:
     id: Id
-    pos: np.ndarray[tuple[Literal[2]], np.dtypes.Float32DType]
+    pos: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]]
 
 
 class Persistence:

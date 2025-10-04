@@ -1,4 +1,5 @@
 import traceback
+from typing import Literal
 
 import numpy as np
 from imgui_bundle import imgui, implot
@@ -22,12 +23,17 @@ class Simulator:
 
         self.chains = chains
 
+        self.cattail_centers: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
         if cattails:
             self.cattail_centers = np.stack([cattail.pos for cattail in cattails])
         else:
-            self.cattail_centers = np.empty((0, 2), dtype=np.float32)
-        self.cattail_positions = self.cattail_centers.copy()
-        self.cattail_velocities = np.zeros(self.cattail_centers.shape, dtype=np.float32)
+            self.cattail_centers = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        self.cattail_positions: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = self.cattail_centers.copy()
+        self.cattail_velocities: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = np.zeros(self.cattail_centers.shape, dtype=np.float32)
 
         self.light_effect = light_effect
 
@@ -85,6 +91,7 @@ class Simulator:
                 for chain, brightness in zip(
                     self.chains, chain_brightness, strict=True
                 ):
+                    brightness = brightness.item()
                     implot.set_next_marker_style(
                         size=brightness * 5 + 3,
                         fill=imgui.ImVec4(brightness, brightness, 0.1, 1),
