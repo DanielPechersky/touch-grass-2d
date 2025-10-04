@@ -91,7 +91,9 @@ class ProjectileLightEffect(LightEffect):
         if len(self.exhausted) != len(cattail_context.centers):
             self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
 
-        acceleration_magnitudes = np.linalg.vector_norm(cattail_context.accelerations)
+        acceleration_magnitudes = np.linalg.vector_norm(
+            cattail_context.accelerations, axis=1
+        )
 
         below_lower_threshold = acceleration_magnitudes < self.lower_threshold
         above_upper_threshold = acceleration_magnitudes > self.upper_threshold
