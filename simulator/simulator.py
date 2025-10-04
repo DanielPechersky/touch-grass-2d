@@ -33,13 +33,15 @@ class Simulator:
         ] = self.cattail_centers.copy()
         self.cattail_velocities: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros(self.cattail_centers.shape, dtype=np.float32)
+        ] = np.zeros(self.cattail_centers.shape, dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
 
         self.light_effect = light_effect
 
         self.light_effect_debug_gui = False
 
-    def update_cattails(self, delta_time: float):
+    def update_cattails(
+        self, delta_time: float
+    ) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]:
         accelerations = np.zeros(self.cattail_positions.shape, dtype=np.float32)
 
         pos = point_to_ndarray(implot.get_plot_mouse_pos())
@@ -63,7 +65,7 @@ class Simulator:
 
         self.cattail_velocities *= self.cattail_damping**delta_time
 
-        return accelerations
+        return accelerations  # pyright: ignore[reportReturnType]
 
     def gui(self, delta_time: float):
         accelerations = self.update_cattails(delta_time)
