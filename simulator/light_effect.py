@@ -4,7 +4,7 @@ from typing import Any, Literal, Protocol
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from simulator.helpers import ndarray_to_scatter, ndarray_to_scatter_many
+from simulator.helpers import ndarray_to_scatter_many
 from simulator.persistence import Chain
 
 
@@ -268,10 +268,17 @@ class PulseLightEffect(LightEffect):
         for pulse_position, pulse_size in zip(
             self.projectile_positions, self.pulse_sizes, strict=True
         ):
-            implot.set_next_marker_style(
-                size=pulse_size.item() * 50, fill=imgui.ImVec4(0, 0, 255, 0.1)
+            center = implot.plot_to_pixels(*pulse_position.tolist())
+            circle_end = implot.plot_to_pixels(
+                pulse_position[0].item() + pulse_size.item(), 0
+            ).x
+            radius = circle_end - center.x
+            draw_list = implot.get_plot_draw_list()
+            draw_list.add_circle_filled(
+                center=center,
+                radius=radius,
+                col=0x33FF0000,
             )
-            implot.plot_scatter("pulses", *ndarray_to_scatter(pulse_position))
 
 
 class PulseLightEffect2(LightEffect):
@@ -374,7 +381,14 @@ class PulseLightEffect2(LightEffect):
         for pulse_position, pulse_size in zip(
             self.projectile_positions, self.pulse_sizes, strict=True
         ):
-            implot.set_next_marker_style(
-                size=pulse_size.item() * 50, fill=imgui.ImVec4(0, 0, 255, 0.1)
+            center = implot.plot_to_pixels(*pulse_position.tolist())
+            circle_end = implot.plot_to_pixels(
+                pulse_position[0].item() + pulse_size.item(), 0
+            ).x
+            radius = circle_end - center.x
+            draw_list = implot.get_plot_draw_list()
+            draw_list.add_circle_filled(
+                center=center,
+                radius=radius,
+                col=0x33FF0000,
             )
-            implot.plot_scatter("pulses", *ndarray_to_scatter(pulse_position))
