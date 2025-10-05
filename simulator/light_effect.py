@@ -250,14 +250,15 @@ class PulseLightEffect(LightEffect):
         chain_points = np.stack([chain.points for chain in chains], dtype=np.float32)
         chain_centers = np.mean(chain_points, axis=1)
 
-        for projectile_pos, pulse_size in zip(
-            self.projectile_positions, self.pulse_sizes
-        ):
-            distances = distances_from_circle(
-                chain_centers, projectile_pos, pulse_size.item()
-            )
-            brightness += np.maximum(0.0, 1.0 - distances * 1.0)
-
+        distances = distances_from_circles(
+            chain_centers,
+            self.projectile_positions,
+            self.pulse_sizes,
+        )
+        brightness += np.maximum(
+            1.0 - distances * 1.0,
+            0,
+        ).sum(axis=1)
         brightness = np.clip(brightness, 0.0, 1.0)
 
         return brightness
@@ -350,18 +351,18 @@ class PulseLightEffect2(LightEffect):
         chain_points = np.stack([chain.points for chain in chains], dtype=np.float32)
         chain_centers = np.mean(chain_points, axis=1)
 
-        for projectile_pos, pulse_size, accumulated_time in zip(
+        distances = distances_from_circles(
+            chain_centers,
             self.projectile_positions,
             self.pulse_sizes,
-            self.accumulated_time - self.projectile_start_times,
-        ):
-            distances = distances_from_circle(
-                chain_centers, projectile_pos, pulse_size.item()
-            )
-            brightness += np.maximum(
-                0.0, 1.0 - distances * 2.0 - max((accumulated_time - 2.0) * 0.1, 0.0)
-            )
-
+        )
+        projectile_travel_times = self.accumulated_time - self.projectile_start_times
+        brightness += np.maximum(
+            1.0
+            - distances * 2.0
+            - np.maximum((projectile_travel_times - 2.0) * 0.1, 0.0),
+            0,
+        ).sum(axis=1)
         brightness = np.clip(brightness, 0.0, 1.0)
 
         return brightness
@@ -382,6 +383,17 @@ class PulseLightEffect2(LightEffect):
 def distances_from_circle(
     points: np.ndarray,
     center: np.ndarray,
-    radius: float,
+    radius: np.ndarray | np.floating,
 ) -> np.ndarray:
-    return np.abs(np.linalg.vector_norm(points - center, axis=-1) - radius)
+    distance_point_from_center = np.linalg.vector_norm(points - center, axis=-1)
+    return np.abs(distance_point_from_center - radius)
+
+
+def distances_from_circles(
+    points: np.ndarray,
+    centers: np.ndarray,
+    radii: np.ndarray,
+) -> np.ndarray:
+    return distances_from_circle(
+        points[:, np.newaxis, :], centers[np.newaxis, :, :], radii
+    )
