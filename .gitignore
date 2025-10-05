@@ -12,3 +12,4 @@ wheels/
 imgui.ini
 *.sgp
 *.sgp-journal
+*.prof
