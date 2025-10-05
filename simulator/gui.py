@@ -107,6 +107,9 @@ class InProjectGui:
         self.chain_size = chain_size
 
         self.location_id: int = location_id
+        scale = self.persistence.get_scale(location_id)
+        assert scale is not None
+        self.scale: float = scale
 
         self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
 
@@ -134,12 +137,6 @@ class InProjectGui:
             self.texture.h / self.scale,
             0,
         )
-
-    @property
-    def scale(self):
-        scale = self.persistence.get_scale(self.location_id)
-        assert scale is not None
-        return scale
 
     @property
     def chains(self) -> list[Chain]:
