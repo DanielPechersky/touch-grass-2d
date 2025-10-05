@@ -158,12 +158,12 @@ class ProjectileLightEffect(LightEffect):
             np.stack([chain.points for chain in chains], dtype=np.float32)
         )
 
-        for projectile_pos in self.projectile_positions:
-            distances = np.linalg.vector_norm(
-                chain_points - projectile_pos, axis=2
-            ).min(axis=1)
-            brightness += np.maximum(0.0, 1.0 - distances * 1.0)
-
+        distances = np.linalg.vector_norm(
+            chain_points[:, :, np.newaxis, :]
+            - self.projectile_positions[np.newaxis, np.newaxis, :, :],
+            axis=-1,
+        )
+        brightness = np.maximum(0.0, 1.0 - distances.min(axis=1) * 1.0).sum(axis=1)
         brightness = np.clip(brightness, 0.0, 1.0)
 
         return brightness
