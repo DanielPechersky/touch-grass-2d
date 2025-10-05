@@ -244,17 +244,16 @@ class PulseLightEffect(LightEffect):
     ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
         brightness = np.zeros((len(chains),), dtype=np.float32)
 
+        chain_points = np.stack([chain.points for chain in chains], dtype=np.float32)
+        chain_centers = np.mean(chain_points, axis=1)
+
         for projectile_pos, pulse_size in zip(
             self.projectile_positions, self.pulse_sizes
         ):
-            for i, chain in enumerate(chains):
-                distance = np.abs(
-                    np.linalg.vector_norm(
-                        np.mean(chain.points, axis=0) - projectile_pos
-                    )
-                    - pulse_size
-                )
-                brightness[i] += max(0.0, 1.0 - distance * 1.0)
+            distances = distances_from_circle(
+                chain_centers, projectile_pos, pulse_size.item()
+            )
+            brightness += np.maximum(0.0, 1.0 - distances * 1.0)
 
         brightness = np.clip(brightness, 0.0, 1.0)
 
@@ -345,21 +344,20 @@ class PulseLightEffect2(LightEffect):
     ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
         brightness = np.zeros((len(chains),), dtype=np.float32)
 
+        chain_points = np.stack([chain.points for chain in chains], dtype=np.float32)
+        chain_centers = np.mean(chain_points, axis=1)
+
         for projectile_pos, pulse_size, accumulated_time in zip(
             self.projectile_positions,
             self.pulse_sizes,
             self.accumulated_time - self.projectile_start_times,
         ):
-            for i, chain in enumerate(chains):
-                distance = np.abs(
-                    np.linalg.vector_norm(
-                        np.mean(chain.points, axis=0) - projectile_pos
-                    )
-                    - pulse_size
-                )
-                brightness[i] += max(
-                    0.0, 1.0 - distance * 2.0 - max((accumulated_time - 2.0) * 0.1, 0.0)
-                )
+            distances = distances_from_circle(
+                chain_centers, projectile_pos, pulse_size.item()
+            )
+            brightness += np.maximum(
+                0.0, 1.0 - distances * 2.0 - max((accumulated_time - 2.0) * 0.1, 0.0)
+            )
 
         brightness = np.clip(brightness, 0.0, 1.0)
 
@@ -376,3 +374,11 @@ class PulseLightEffect2(LightEffect):
             implot_draw_circle(
                 center=pulse_position, radius=pulse_size.item(), col=0x33FF0000
             )
+
+
+def distances_from_circle(
+    points: np.ndarray,
+    center: np.ndarray,
+    radius: float,
+) -> np.ndarray:
+    return np.abs(np.linalg.vector_norm(points - center, axis=-1) - radius)
