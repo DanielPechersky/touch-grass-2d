@@ -126,6 +126,7 @@ class ProjectileLightEffect(LightEffect):
         new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
         new_velocities: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
     ):
+        new_positions += new_velocities * 1.0
         self.projectile_start_times = np.concatenate(
             (
                 self.projectile_start_times,
