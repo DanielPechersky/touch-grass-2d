@@ -18,12 +18,7 @@ class Simulator:
         chains: list[Chain],
         cattails: list[Cattail],
         light_effect: LightEffect | None = None,
-        cattail_spring_constant=5.0,
-        cattail_damping=0.3,
     ):
-        self.cattail_spring_constant = cattail_spring_constant
-        self.cattail_damping = cattail_damping
-
         self.chains = chains
 
         self.cattail_centers: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
@@ -42,9 +37,7 @@ class Simulator:
 
         self.light_effect_debug_gui = False
 
-    def update_cattails(
-        self, delta_time: float
-    ) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]:
+    def accelerations_from_cursor(self):
         accelerations = np.zeros(self.cattail_positions.shape, dtype=np.float32)
 
         pos = point_to_ndarray(implot.get_plot_mouse_pos())
@@ -55,18 +48,53 @@ class Simulator:
             displacements_from_cursor[valid]
             / distances_from_cursor[valid][:, np.newaxis]
         )
+
         accelerations[valid] += (
             directions_from_cursor
+            * 6.0
             * np.maximum(0.5 - distances_from_cursor[valid], 0)[:, np.newaxis]
         )
+        return accelerations
 
+    def accelerations_from_spring(self):
         distance_from_centers = self.cattail_positions - self.cattail_centers
-        accelerations += -distance_from_centers * self.cattail_spring_constant
+        force_inwards = distance_from_centers * 4.0 + distance_from_centers**2 * 1.0
+        return -force_inwards
+
+    def decay(self, delta_time: float):
+        """
+        Decays the velocity of the cattail, as if through friction or air resistance.
+        Decays radial velocity more than angular velocity.
+        """
+        displacement_from_center = self.cattail_positions - self.cattail_centers
+        displacement_norm = np.linalg.vector_norm(displacement_from_center, axis=1)
+        # Avoid division by zero
+        displacement_norm = np.where(displacement_norm == 0, 1, displacement_norm)
+        radial_dir = displacement_from_center / displacement_norm[:, np.newaxis]
+
+        # Project velocities onto radial and tangential directions
+        radial_velocity = (
+            np.sum(self.cattail_velocities * radial_dir, axis=1, keepdims=True)
+            * radial_dir
+        )
+        tangential_velocity = self.cattail_velocities - radial_velocity
+
+        radial_velocity *= np.exp(-0.1 * delta_time)
+        tangential_velocity *= np.exp(-0.5 * delta_time)
+
+        self.cattail_velocities = radial_velocity + tangential_velocity
+
+    def update_cattails(
+        self, delta_time: float
+    ) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]:
+        accelerations = (
+            self.accelerations_from_cursor() + self.accelerations_from_spring()
+        )
 
         self.cattail_velocities += accelerations * delta_time
         self.cattail_positions += self.cattail_velocities * delta_time
 
-        self.cattail_velocities *= self.cattail_damping**delta_time
+        self.decay(delta_time)
 
         return accelerations  # pyright: ignore[reportReturnType]
 
