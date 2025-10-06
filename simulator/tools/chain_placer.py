@@ -10,7 +10,7 @@ class ChainPlacer:
     def __init__(self, chain_size: int, spacing: float) -> None:
         self.current_chain: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.empty((0, 2), dtype=np.float32)  # type: ignore
 
         self.chain_size = chain_size
         self.spacing = spacing
@@ -65,5 +65,5 @@ class ChainPlacer:
 
         if self.current_chain_length == self.chain_size:
             result = self.current_chain
-            self.current_chain = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+            self.current_chain = np.empty((0, 2), dtype=np.float32)  # type: ignore
             return result

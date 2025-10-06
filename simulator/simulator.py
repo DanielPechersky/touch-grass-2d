@@ -25,13 +25,13 @@ class Simulator:
         if cattails:
             self.cattail_centers = np.stack([cattail.pos for cattail in cattails])
         else:
-            self.cattail_centers = np.empty((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+            self.cattail_centers = np.empty((0, 2), dtype=np.float32)  # type: ignore
         self.cattail_positions: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
         ] = self.cattail_centers.copy()
         self.cattail_velocities: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros(self.cattail_centers.shape, dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.zeros(self.cattail_centers.shape, dtype=np.float32)  # type: ignore
 
         self.light_effect = light_effect
 
@@ -96,7 +96,7 @@ class Simulator:
 
         self.decay(delta_time)
 
-        return accelerations  # pyright: ignore[reportReturnType]
+        return accelerations  # type: ignore
 
     def gui(self, delta_time: float):
         accelerations = self.update_cattails(delta_time)

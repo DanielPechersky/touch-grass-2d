@@ -81,10 +81,10 @@ class ProjectileLightEffect(LightEffect):
         )
         self.projectile_positions: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
         self.projectile_velocities: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
 
     def calculate_chain_brightness(
         self,
@@ -193,7 +193,7 @@ class PulseLightEffect(LightEffect):
         )
         self.projectile_positions: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
 
     def calculate_chain_brightness(
         self,
@@ -294,7 +294,7 @@ class PulseLightEffect2(LightEffect):
         )
         self.projectile_positions: np.ndarray[
             tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]
+        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
 
     def calculate_chain_brightness(
         self,
