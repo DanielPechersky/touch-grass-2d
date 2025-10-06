@@ -65,9 +65,6 @@ class AddImageGui:
         if self.texture is None:
             self.texture = GlTexture.load_texture_rgba(self.image)
 
-        implot.create_context()
-        disable_double_click_to_fit()
-
         size = imgui.ImVec2(800, 600)
         with implot_begin_plot(
             "Set the scale by picking two points and inputting the distance between them",
@@ -152,9 +149,6 @@ class InProjectGui:
         return cattails
 
     def gui(self):
-        implot.create_context()
-        disable_double_click_to_fit()
-
         if self.texture is None:
             img = self.persistence.get_image(self.location_id)
             assert img is not None
@@ -308,7 +302,14 @@ class Gui:
         self.add_image_gui: AddImageGui | None = None
         self.in_project_gui: InProjectGui | None = None
 
+        self.created_context = False
+
     def gui(self):
+        if not self.created_context:
+            implot.create_context()
+            disable_double_click_to_fit()
+            self.created_context = True
+
         if self.persistence is None:
             self.in_project_gui = None
             if self.project_picker is None:
