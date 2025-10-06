@@ -1,3 +1,4 @@
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
@@ -305,32 +306,36 @@ class Gui:
         self.created_context = False
 
     def gui(self):
-        if not self.created_context:
-            implot.create_context()
-            disable_double_click_to_fit()
-            self.created_context = True
+        try:
+            if not self.created_context:
+                implot.create_context()
+                disable_double_click_to_fit()
+                self.created_context = True
 
-        if self.persistence is None:
-            self.in_project_gui = None
-            if self.project_picker is None:
-                self.project_picker = ProjectPicker()
-            self.persistence = self.project_picker.gui()
-            return
-        else:
-            self.project_picker = None
+            if self.persistence is None:
+                self.in_project_gui = None
+                if self.project_picker is None:
+                    self.project_picker = ProjectPicker()
+                self.persistence = self.project_picker.gui()
+                return
+            else:
+                self.project_picker = None
 
-        location_id = self.persistence.get_location_id()
-        if location_id is None:
-            if self.add_image_gui is None:
-                self.add_image_gui = AddImageGui(self.persistence)
-            result = self.add_image_gui.gui()
-            if result is not None:
-                img, scale = result
-                self.location_id = self.persistence.create_location(img, scale)
-            return
-        else:
-            self.add_image_gui = None
+            location_id = self.persistence.get_location_id()
+            if location_id is None:
+                if self.add_image_gui is None:
+                    self.add_image_gui = AddImageGui(self.persistence)
+                result = self.add_image_gui.gui()
+                if result is not None:
+                    img, scale = result
+                    self.location_id = self.persistence.create_location(img, scale)
+                return
+            else:
+                self.add_image_gui = None
 
-        if self.in_project_gui is None:
-            self.in_project_gui = InProjectGui(self.persistence, location_id)
-        self.in_project_gui.gui()
+            if self.in_project_gui is None:
+                self.in_project_gui = InProjectGui(self.persistence, location_id)
+            self.in_project_gui.gui()
+        except Exception:
+            print("Error in GUI")
+            traceback.print_exc()
