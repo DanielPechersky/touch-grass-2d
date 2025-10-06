@@ -1,14 +1,14 @@
-from typing import Literal
-
-import numpy as np
 from imgui_bundle import imgui, implot
 
 from simulator.helpers import ndarray_to_scatter, point_to_ndarray
+from simulator.persistence import Cattail, Persistence
+from simulator.tools import Tool
 
 
-class CattailPlacer:
-    def __init__(self):
-        pass
+class CattailPlacer(Tool):
+    def __init__(self, persistence: Persistence, location_id: int):
+        self.persistence = persistence
+        self.location_id = location_id
 
     @property
     def previewed_point(self):
@@ -17,11 +17,13 @@ class CattailPlacer:
 
         return point_to_ndarray(implot.get_plot_mouse_pos())
 
-    def gui(self) -> np.ndarray[tuple[Literal[2]], np.dtype[np.floating]] | None:
+    def main_gui(self):
         if self.previewed_point is None:
             return None
 
         implot.set_next_marker_style(size=5, fill=imgui.ImVec4(1.0, 0.0, 0.0, 0.5))
         implot.plot_scatter("preview", *ndarray_to_scatter(self.previewed_point))
         if imgui.is_mouse_clicked(imgui.MouseButton_.left):
-            return self.previewed_point
+            self.persistence.append_cattail(
+                self.location_id, Cattail(id=None, pos=self.previewed_point)
+            )

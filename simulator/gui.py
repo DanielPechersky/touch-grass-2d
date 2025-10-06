@@ -1,7 +1,6 @@
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 from imgui_bundle import imgui, imgui_ctx, implot, portable_file_dialogs
@@ -9,17 +8,12 @@ from PIL import Image
 
 from simulator.gl_texture import GlTexture
 from simulator.helpers import ndarray_to_scatter_many, plot_chain
-from simulator.light_effect import (
-    ProjectileLightEffect,
-    PulseLightEffect,
-    PulseLightEffect2,
-    TestLightEffect,
-)
+from simulator.measurer import Measurer
 from simulator.persistence import Cattail, Chain, Persistence
-from simulator.simulator import Simulator
+from simulator.tools import Tool
 from simulator.tools.cattail_placer import CattailPlacer
 from simulator.tools.chain_placer import ChainPlacer
-from simulator.tools.measurer import Measurer
+from simulator.tools.simulator import Simulator
 
 
 def display_chains(chains: list[Chain]):
@@ -94,12 +88,6 @@ class AddImageGui:
 class InProjectGui:
     def __init__(self, persistence: Persistence, location_id: int, chain_size=5):
         self.texture = None
-        self.tool: Literal["view", "place_chain", "place_cattail"] = "view"
-
-        self.simulator: Simulator | None = None
-        self.measurer: Measurer | None = None
-        self.point_placer: ChainPlacer | None = None
-        self.cattail_placer = CattailPlacer()
 
         self.persistence = persistence
         self.chain_size = chain_size
@@ -109,21 +97,18 @@ class InProjectGui:
         assert scale is not None
         self.scale: float = scale
 
-        self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
+        self.simulator = Simulator()
+        self.update_simulator()
+        self.chain_placer = ChainPlacer(
+            persistence, location_id, chain_size, 2.5 / chain_size
+        )
+        self.cattail_placer = CattailPlacer(persistence, location_id)
 
-    @property
-    def light_effects(self):
-        return {
-            "Pulse": PulseLightEffect(),
-            "Pulse 2": PulseLightEffect2(),
-            "Projectile": ProjectileLightEffect(),
-            "Test": TestLightEffect(),
-        }
+        self.tool: Tool = self.simulator
 
-    @property
-    def selected_light_effect(self):
-        if self.selected_light_effect_name is not None:
-            return self.light_effects[self.selected_light_effect_name]
+    def update_simulator(self):
+        self.simulator.set_chains(self.chains)
+        self.simulator.set_cattails(self.cattails)
 
     @property
     def axes_limits(self):
@@ -155,6 +140,34 @@ class InProjectGui:
             assert img is not None
             self.texture = GlTexture.load_texture_rgba(img)
 
+        # sidebar
+        SIDEBAR_SIZE = 200
+        with imgui_ctx.begin_group():
+            with imgui_ctx.begin_child(
+                "Tools",
+                size=imgui.ImVec2(SIDEBAR_SIZE, 0),
+                child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
+            ):
+                imgui.separator_text("Tools")
+                if imgui.radio_button("View", isinstance(self.tool, Simulator)):
+                    self.tool.switched_away()
+                    self.update_simulator()
+                    self.tool = self.simulator
+                if imgui.radio_button(
+                    "Place chain", isinstance(self.tool, ChainPlacer)
+                ):
+                    self.tool.switched_away()
+                    self.tool = self.chain_placer
+                if imgui.radio_button(
+                    "Place cattail", isinstance(self.tool, CattailPlacer)
+                ):
+                    self.tool.switched_away()
+                    self.tool = self.cattail_placer
+
+            self.tool.sidebar_gui(SIDEBAR_SIZE)
+
+        imgui.same_line()
+
         size = imgui.ImVec2(800, 600)
         with implot_begin_plot(
             "Exhibit simulator",
@@ -177,58 +190,14 @@ class InProjectGui:
                 ),
             )
 
-            if self.tool == "view":
-                if self.simulator is None:
-                    self.simulator = Simulator(
-                        chains=self.chains,
-                        cattails=self.cattails,
-                        light_effect=self.selected_light_effect,
-                    )
-                self.simulator.gui(imgui.get_io().delta_time)
-            else:
-                self.simulator = None
-
+            if not isinstance(self.tool, Simulator):
                 display_chains(self.chains)
                 display_cattails(self.cattails)
 
-            pressed_escape = imgui.is_key_pressed(imgui.Key.escape)
+            if imgui.is_key_pressed(imgui.Key.escape):
+                self.tool.switched_away()
 
-            if self.tool == "place_chain":
-                if self.point_placer is None or pressed_escape:
-                    self.point_placer = ChainPlacer(
-                        chain_size=self.chain_size, spacing=2.5 / self.chain_size
-                    )
-                new_chain = self.point_placer.gui()
-                if new_chain is not None:
-                    new_chain = Chain(id=None, points=new_chain)
-                    self.persistence.append_chain(self.location_id, new_chain)
-            else:
-                self.point_placer = None
-
-            if self.tool == "place_cattail":
-                new_cattail = self.cattail_placer.gui()
-                if new_cattail is not None:
-                    new_cattail = Cattail(id=None, pos=new_cattail)
-                    self.persistence.append_cattail(self.location_id, new_cattail)
-
-        with imgui_ctx.begin("Tools"):
-            if imgui.radio_button("View", self.tool == "view"):
-                self.tool = "view"
-            if imgui.radio_button("Place chain", self.tool == "place_chain"):
-                self.tool = "place_chain"
-            if imgui.radio_button("Place cattail", self.tool == "place_cattail"):
-                self.tool = "place_cattail"
-
-            imgui.separator()
-
-            if self.simulator is not None:
-                self.simulator.tool_gui()
-
-        with imgui_ctx.begin("Light Effect"):
-            for name in self.light_effects.keys():
-                if imgui.radio_button(name, self.selected_light_effect_name == name):
-                    self.selected_light_effect_name = name
-                    self.simulator = None
+            self.tool.main_gui()
 
 
 def disable_double_click_to_fit():

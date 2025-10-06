@@ -4,20 +4,26 @@ import numpy as np
 from imgui_bundle import imgui, implot
 
 from simulator.helpers import ndarray_to_scatter, plot_chain, point_to_ndarray
+from simulator.persistence import Chain, Persistence
+from simulator.tools import Tool
 
 
-class ChainPlacer:
-    def __init__(self, chain_size: int, spacing: float) -> None:
-        self.current_chain: np.ndarray[
-            tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.empty((0, 2), dtype=np.float32)  # type: ignore
-
+class ChainPlacer(Tool):
+    def __init__(
+        self,
+        persistence: Persistence,
+        location_id: int,
+        chain_size: int,
+        spacing: float,
+    ):
+        self.persistence = persistence
+        self.location_id = location_id
         self.chain_size = chain_size
         self.spacing = spacing
 
-    def scale_points(self, scale):
-        self.chains *= scale
-        self.current_chain *= scale
+        self.current_chain: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = np.empty((0, 2), dtype=np.float32)  # type: ignore
 
     @property
     def current_chain_length(self):
@@ -46,7 +52,7 @@ class ChainPlacer:
         vec *= self.spacing
         return self.last_placed_point + vec
 
-    def gui(self) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] | None:
+    def main_gui(self):
         plot_chain(
             "new_chain", self.current_chain, color=imgui.ImVec4(0.0, 0.8, 0.0, 1.0)
         )
@@ -66,4 +72,10 @@ class ChainPlacer:
         if self.current_chain_length == self.chain_size:
             result = self.current_chain
             self.current_chain = np.empty((0, 2), dtype=np.float32)  # type: ignore
-            return result
+            self.persistence.append_chain(
+                self.location_id,
+                Chain(id=None, points=result),
+            )
+
+    def switched_away(self):
+        self.current_chain = np.empty((0, 2), dtype=np.float32)  # type: ignore
