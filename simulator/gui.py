@@ -113,10 +113,10 @@ class InProjectGui:
     @property
     def light_effects(self):
         return {
-            "Test": TestLightEffect(),
-            "Projectile": ProjectileLightEffect(),
             "Pulse": PulseLightEffect(),
             "Pulse 2": PulseLightEffect2(),
+            "Projectile": ProjectileLightEffect(),
+            "Test": TestLightEffect(),
         }
 
     @property
