@@ -4,7 +4,10 @@ from typing import Literal
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from simulator.helpers import ndarray_to_scatter_many, point_to_ndarray
+from simulator.helpers import (
+    ndarray_to_scatter_many,
+    point_to_ndarray,
+)
 from simulator.light_effect import CattailContext, LightEffect
 from simulator.persistence import Cattail, Chain
 
@@ -70,10 +73,7 @@ class Simulator:
     def gui(self, delta_time: float):
         accelerations = self.update_cattails(delta_time)
 
-        implot.plot_scatter(
-            "cattail_positions",
-            *ndarray_to_scatter_many(self.cattail_positions),
-        )
+        self.plot_cattails()
 
         if self.light_effect is not None:
             try:
@@ -105,6 +105,20 @@ class Simulator:
             except Exception:
                 print("Error in light effect")
                 traceback.print_exc()
+
+    def plot_cattails(self):
+        for center, position in zip(
+            self.cattail_centers, self.cattail_positions, strict=True
+        ):
+            implot.set_next_line_style(col=imgui.ImVec4(1.0, 0.6, 0.1, 1), weight=3)
+            points = np.ascontiguousarray(np.stack([position, center]).T)
+            implot.plot_line("cattail_lines", points[0], points[1])
+
+        implot.set_next_marker_style(size=3, fill=imgui.ImVec4(1.0, 0.6, 0.1, 1))
+        implot.plot_scatter(
+            "cattail_positions",
+            *ndarray_to_scatter_many(self.cattail_positions),
+        )
 
     def tool_gui(self):
         _, self.light_effect_debug_gui = imgui.checkbox(
