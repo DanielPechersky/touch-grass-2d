@@ -67,7 +67,7 @@ class TestLightEffect(LightEffect):
 
 
 class ProjectileLightEffect(LightEffect):
-    def __init__(self, upper_threshold=0.1, lower_threshold=0.03):
+    def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
@@ -111,7 +111,9 @@ class ProjectileLightEffect(LightEffect):
 
         relevant_accelerations = cattail_context.accelerations[should_shoot]
         projectile_velocities = (
-            relevant_accelerations / np.linalg.vector_norm(relevant_accelerations) * 1.0
+            -relevant_accelerations
+            / np.linalg.vector_norm(relevant_accelerations)
+            * 1.0
         )
         projectile_centers = cattail_context.centers[should_shoot]
 
@@ -177,7 +179,7 @@ class ProjectileLightEffect(LightEffect):
 
 
 class PulseLightEffect(LightEffect):
-    def __init__(self, upper_threshold=0.1, lower_threshold=0.03):
+    def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
@@ -278,7 +280,7 @@ class PulseLightEffect(LightEffect):
 
 
 class PulseLightEffect2(LightEffect):
-    def __init__(self, upper_threshold=0.1, lower_threshold=0.03):
+    def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
