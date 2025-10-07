@@ -2,7 +2,7 @@ import traceback
 from typing import Literal
 
 import numpy as np
-from imgui_bundle import imgui, imgui_ctx, implot
+from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot
 
 from simulator.helpers import (
     ndarray_to_scatter_many,
@@ -57,6 +57,8 @@ class Simulator(Tool):
             ]
 
     def main_gui(self):
+        hello_imgui_set_idling(False)
+
         delta_time = imgui.get_io().delta_time
         accelerations = self.cattail_physics.update_cattails(delta_time)
 
@@ -128,6 +130,11 @@ class Simulator(Tool):
 
     def switched_away(self):
         self.cattail_physics.reset()
+        hello_imgui_set_idling(True)
+
+
+def hello_imgui_set_idling(enable: bool):
+    hello_imgui.get_runner_params().fps_idling.enable_idling = enable
 
 
 class CattailPhysics:
