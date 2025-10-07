@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
-from imgui_bundle import imgui, imgui_ctx, implot, portable_file_dialogs
+from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
 from PIL import Image
 
 from simulator.gl_texture import GlTexture
@@ -251,7 +251,17 @@ class ProjectPicker:
                 )
                 match d.result():
                     case [path]:
+                        set_last_opened_project(path)
                         return Persistence(path)
+
+
+def get_last_opened_project() -> str | None:
+    p = hello_imgui.load_user_pref("last_opened_project").strip() or None
+    return p
+
+
+def set_last_opened_project(path: str | None):
+    hello_imgui.save_user_pref("last_opened_project", path or "")
 
 
 @contextmanager
@@ -282,12 +292,35 @@ class Gui:
 
         self.created_context = False
 
+    def menu_bar(self):
+        with imgui_ctx.begin_main_menu_bar():
+            with imgui_ctx.begin_menu("File"):
+                if imgui.menu_item(
+                    "Close", "", False, enabled=self.persistence is not None
+                )[0]:
+                    set_last_opened_project(None)
+                    self.persistence = None
+
     def gui(self):
         try:
+            self.menu_bar()
+
             if not self.created_context:
                 implot.create_context()
                 disable_double_click_to_fit()
                 self.created_context = True
+
+            if (
+                self.persistence is None
+                and (last_opened_project := get_last_opened_project()) is not None
+            ):
+                print(f"Last opened project: {last_opened_project}")
+                try:
+                    self.persistence = Persistence(last_opened_project)
+                    return
+                except Exception as e:
+                    print(f"Failed to open last project: {e}")
+                    set_last_opened_project(None)
 
             if self.persistence is None:
                 self.in_project_gui = None
