@@ -212,35 +212,46 @@ class ProjectPicker:
         return self.selected_folder / f"{self.new_project_name}.sgp"
 
     def gui(self) -> Persistence | None:
-        imgui.separator_text("New Project")
-        set, name = imgui.input_text_with_hint(
-            "##", "My Project", self.new_project_name
+        imgui.text(
+            "No project is opened. Create a new project or open an existing project."
         )
-        if set:
-            self.new_project_name = name
-        imgui.same_line()
-        if imgui.button("Choose Folder"):
-            d = portable_file_dialogs.select_folder("Choose folder for new project")
-            path = d.result()
-            if path:
-                self.selected_folder = Path(path)
-
-        imgui.text(f"{self.project_path}")
-        imgui.same_line()
-        with imgui_disable(self.new_project_name == ""):
-            if imgui.button("Create"):
-                return Persistence(str(self.project_path))
-
-        imgui.separator_text("Open Existing Project")
-        if imgui.button("Open Project"):
-            d = portable_file_dialogs.open_file(
-                "Select a project file",
-                default_path=".",
-                filters=["Switchgrass Projects", "*.sgp"],
+        with imgui_ctx.begin_child(
+            "New Project",
+            child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
+        ):
+            imgui.separator_text("New Project")
+            set, name = imgui.input_text_with_hint(
+                "##New Project Name", "My Project", self.new_project_name
             )
-            match d.result():
-                case [path]:
-                    return Persistence(path)
+            if set:
+                self.new_project_name = name
+            imgui.same_line()
+            if imgui.button("Choose Folder"):
+                d = portable_file_dialogs.select_folder("Choose folder for new project")
+                path = d.result()
+                if path:
+                    self.selected_folder = Path(path)
+
+            imgui.text(f"{self.project_path}")
+            imgui.same_line()
+            with imgui_disable(self.new_project_name == ""):
+                if imgui.button("Create"):
+                    return Persistence(str(self.project_path))
+
+        with imgui_ctx.begin_child(
+            "Open Existing Project",
+            child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
+        ):
+            imgui.separator_text("Open Existing Project")
+            if imgui.button("Open Project"):
+                d = portable_file_dialogs.open_file(
+                    "Select a project file",
+                    default_path=".",
+                    filters=["Switchgrass Projects", "*.sgp"],
+                )
+                match d.result():
+                    case [path]:
+                        return Persistence(path)
 
 
 @contextmanager
