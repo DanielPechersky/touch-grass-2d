@@ -111,10 +111,9 @@ class Simulator(Tool):
             *ndarray_to_scatter_many(self.cattail_physics.cattail_positions),
         )
 
-    def sidebar_gui(self, width):
+    def sidebar_gui(self):
         with imgui_ctx.begin_child(
             "Light Effect",
-            size=imgui.ImVec2(width, 0),
             child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
         ):
             imgui.separator_text("Light Effect")

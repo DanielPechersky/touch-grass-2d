@@ -140,12 +140,9 @@ class InProjectGui:
             assert img is not None
             self.texture = GlTexture.load_texture_rgba(img)
 
-        # sidebar
-        SIDEBAR_SIZE = 200
-        with imgui_ctx.begin_group():
+        with imgui_ctx.begin_child("Sidebar", size=imgui.ImVec2(200, 0)):
             with imgui_ctx.begin_child(
                 "Tools",
-                size=imgui.ImVec2(SIDEBAR_SIZE, 0),
                 child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
             ):
                 imgui.separator_text("Tools")
@@ -164,7 +161,7 @@ class InProjectGui:
                     self.tool.switched_away()
                     self.tool = self.cattail_placer
 
-            self.tool.sidebar_gui(SIDEBAR_SIZE)
+            self.tool.sidebar_gui()
 
         imgui.same_line()
 
