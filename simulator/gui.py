@@ -2,36 +2,16 @@ import traceback
 from contextlib import contextmanager
 from pathlib import Path
 
-import numpy as np
 from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
 from PIL import Image
 
 from simulator.gl_texture import GlTexture
-from simulator.helpers import ndarray_to_scatter_many, plot_chain
 from simulator.measurer import Measurer
 from simulator.persistence import Cattail, Chain, Persistence
 from simulator.tools import Tool
 from simulator.tools.cattail_placer import CattailPlacer
-from simulator.tools.chain_placer import ChainPlacer
+from simulator.tools.chain_placer import ChainTool
 from simulator.tools.simulator import Simulator
-
-
-def display_chains(chains: list[Chain]):
-    for chain in chains:
-        plot_chain("chains", chain.points, color=imgui.ImVec4(1.0, 1.0, 0.0, 1.0))
-
-
-def display_cattails(cattails: list[Cattail]):
-    implot.set_next_marker_style(
-        marker=implot.Marker_.square, size=10, fill=(1.0, 0.0, 0.0, 1.0)
-    )
-    if not cattails:
-        return
-    cattail_positions = np.stack([cattail.pos for cattail in cattails])
-    implot.plot_scatter(
-        "cattails",
-        *ndarray_to_scatter_many(cattail_positions),
-    )
 
 
 class AddImageGui:
@@ -99,7 +79,7 @@ class InProjectGui:
 
         self.simulator = Simulator()
         self.update_simulator()
-        self.chain_placer = ChainPlacer(
+        self.chain_tool = ChainTool(
             persistence, location_id, chain_size, 2.5 / chain_size
         )
         self.cattail_placer = CattailPlacer(persistence, location_id)
@@ -150,11 +130,9 @@ class InProjectGui:
                     self.tool.switched_away()
                     self.update_simulator()
                     self.tool = self.simulator
-                if imgui.radio_button(
-                    "Place chain", isinstance(self.tool, ChainPlacer)
-                ):
+                if imgui.radio_button("Place chain", isinstance(self.tool, ChainTool)):
                     self.tool.switched_away()
-                    self.tool = self.chain_placer
+                    self.tool = self.chain_tool
                 if imgui.radio_button(
                     "Place cattail", isinstance(self.tool, CattailPlacer)
                 ):
@@ -186,10 +164,6 @@ class InProjectGui:
                     self.texture.h / self.scale,
                 ),
             )
-
-            if not isinstance(self.tool, Simulator):
-                display_chains(self.chains)
-                display_cattails(self.cattails)
 
             if imgui.is_key_pressed(imgui.Key.escape):
                 self.tool.switched_away()

@@ -132,6 +132,12 @@ class Persistence:
             (json.dumps(chain.points.tolist()), chain.id),
         )
 
+    def delete_chain(self, chain_id: int):
+        self.conn.execute(
+            "DELETE FROM chains WHERE id = ?",
+            (chain_id,),
+        )
+
     def append_chain(self, location_id: int, chain: Chain[None]):
         self.conn.execute(
             "INSERT INTO chains(location_id, points) VALUES(?, ?)",

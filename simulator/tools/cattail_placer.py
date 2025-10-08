@@ -1,6 +1,11 @@
 from imgui_bundle import imgui, implot
 
-from simulator.helpers import ndarray_to_scatter, point_to_ndarray
+from simulator.helpers import (
+    display_cattails,
+    display_chains,
+    ndarray_to_scatter,
+    point_to_ndarray,
+)
 from simulator.persistence import Cattail, Persistence
 from simulator.tools import Tool
 
@@ -18,6 +23,9 @@ class CattailPlacer(Tool):
         return point_to_ndarray(implot.get_plot_mouse_pos())
 
     def main_gui(self):
+        display_chains(self.persistence.get_chains(self.location_id))
+        display_cattails(self.persistence.get_cattails(self.location_id))
+
         if self.previewed_point is None:
             return None
 

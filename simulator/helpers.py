@@ -3,6 +3,26 @@ from typing import Literal
 import numpy as np
 from imgui_bundle import imgui, implot
 
+from simulator.persistence import Cattail, Chain
+
+
+def display_chains(chains: list[Chain]):
+    for chain in chains:
+        plot_chain("chains", chain.points, color=imgui.ImVec4(1.0, 1.0, 0.0, 1.0))
+
+
+def display_cattails(cattails: list[Cattail]):
+    implot.set_next_marker_style(
+        marker=implot.Marker_.square, size=10, fill=(1.0, 0.0, 0.0, 1.0)
+    )
+    if not cattails:
+        return
+    cattail_positions = np.stack([cattail.pos for cattail in cattails])
+    implot.plot_scatter(
+        "cattails",
+        *ndarray_to_scatter_many(cattail_positions),
+    )
+
 
 def point_to_ndarray(
     point: implot.Point,
