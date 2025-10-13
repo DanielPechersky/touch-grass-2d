@@ -5,9 +5,11 @@ from pathlib import Path
 from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
 from PIL import Image
 
+from simulator.chain_menu import chain_menu
 from simulator.gl_texture import GlTexture
 from simulator.measurer import Measurer
 from simulator.persistence import Cattail, Chain, Persistence
+from simulator.selection import Selection
 from simulator.tools import Tool
 from simulator.tools.cattail_placer import CattailPlacer
 from simulator.tools.chain_placer import ChainTool
@@ -83,6 +85,7 @@ class InProjectGui:
         self.cattail_placer = CattailPlacer(persistence)
 
         self.tool: Tool = self.simulator
+        self.selection = Selection(set())
 
     def update_simulator(self):
         self.simulator.set_chains(self.chains)
@@ -112,12 +115,7 @@ class InProjectGui:
         assert cattails is not None
         return cattails
 
-    def gui(self):
-        if self.texture is None:
-            img = self.persistence.get_image(self.location_id)
-            assert img is not None
-            self.texture = GlTexture.load_texture_rgba(img)
-
+    def sidebar_gui(self):
         with imgui_ctx.begin_child("Sidebar", size=imgui.ImVec2(200, 0)):
             with imgui_ctx.begin_child(
                 "Tools",
@@ -138,6 +136,20 @@ class InProjectGui:
                     self.tool = self.cattail_placer
 
             self.tool.sidebar_gui()
+
+            with imgui_ctx.begin_child(
+                "Chain Menu",
+                child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
+            ):
+                self.selection = chain_menu(self.persistence, self.selection)
+
+    def gui(self):
+        if self.texture is None:
+            img = self.persistence.get_image(self.location_id)
+            assert img is not None
+            self.texture = GlTexture.load_texture_rgba(img)
+
+        self.sidebar_gui()
 
         imgui.same_line()
 

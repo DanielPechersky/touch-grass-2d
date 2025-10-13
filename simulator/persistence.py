@@ -18,15 +18,38 @@ Pixels per metre
 
 
 @dataclass
+class Group[Id]:
+    id: Id
+
+    parent_group_id: int | None = None
+
+    @property
+    def external_id(self):
+        return f"g_{self.id}"
+
+
+@dataclass
 class Chain[Id]:
     id: Id
     points: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
+
+    group_id: int | None = None
+
+    @property
+    def external_id(self):
+        return f"c_{self.id}"
 
 
 @dataclass
 class Cattail[Id]:
     id: Id
     pos: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]]
+
+    group_id: int | None = None
+
+    @property
+    def external_id(self):
+        return f"t_{self.id}"
 
 
 class Persistence:
@@ -88,20 +111,52 @@ class Persistence:
         if row is not None:
             return row[0]
 
+    def get_groups(self) -> list[Group[int]]:
+        rows = self.conn.execute(
+            "SELECT id, parent_group_id FROM groups WHERE project_id = ? ORDER BY id",
+            (self.project_id,),
+        )
+        return [Group(id=row[0], parent_group_id=row[1]) for row in rows]
+
+    def append_group(self, group: Group[None]) -> int:
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO groups(project_id, parent_group_id) VALUES(?, ?)",
+            (self.project_id, group.parent_group_id),
+        )
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def update_group(self, group: Group[int]):
+        self.conn.execute(
+            "UPDATE groups SET parent_group_id = ? WHERE id = ?",
+            (group.parent_group_id, group.id),
+        )
+
+    def delete_group(self, group_id: int):
+        self.conn.execute(
+            "DELETE FROM groups WHERE id = ?",
+            (group_id,),
+        )
+
     def get_chains(self) -> list[Chain[int]]:
         rows = self.conn.execute(
-            "SELECT id, points FROM chains WHERE project_id = ? ORDER BY id",
+            "SELECT id, points, group_id FROM chains WHERE project_id = ? ORDER BY id",
             (self.project_id,),
         )
         return [
-            Chain(id=row[0], points=np.array(json.loads(row[1]), dtype=np.float32))
+            Chain(
+                id=row[0],
+                points=np.array(json.loads(row[1]), dtype=np.float32),
+                group_id=row[2],
+            )
             for row in rows
         ]
 
     def update_chain(self, chain: Chain[int]):
         self.conn.execute(
-            "UPDATE chains SET points = ? WHERE id = ?",
-            (json.dumps(chain.points.tolist()), chain.id),
+            "UPDATE chains SET points = ?, group_id = ? WHERE id = ?",
+            (json.dumps(chain.points.tolist()), chain.group_id, chain.id),
         )
 
     def delete_chain(self, chain_id: int):
@@ -118,24 +173,28 @@ class Persistence:
 
     def get_cattails(self) -> list[Cattail[int]]:
         rows = self.conn.execute(
-            "SELECT id, x, y FROM cattails WHERE project_id = ? ORDER BY id",
+            "SELECT id, x, y, group_id FROM cattails WHERE project_id = ? ORDER BY id",
             (self.project_id,),
         )
         return [
-            Cattail(id=row[0], pos=np.array([row[1], row[2]], dtype=np.float32))
+            Cattail(
+                id=row[0],
+                pos=np.array([row[1], row[2]], dtype=np.float32),
+                group_id=row[3],
+            )
             for row in rows
         ]
 
     def update_cattail(self, cattail: Cattail[int]):
         self.conn.execute(
-            "UPDATE cattails SET x = ?, y = ? WHERE id = ?",
-            (*cattail.pos.tolist(), cattail.id),
+            "UPDATE cattails SET x = ?, y = ?, group_id = ? WHERE id = ?",
+            (*cattail.pos.tolist(), cattail.group_id, cattail.id),
         )
 
     def append_cattail(self, cattail: Cattail[None]):
         self.conn.execute(
-            "INSERT INTO cattails(project_id, x, y) VALUES(?, ?, ?)",
-            (self.project_id, *cattail.pos.tolist()),
+            "INSERT INTO cattails(project_id, x, y, group_id) VALUES(?, ?, ?, ?)",
+            (self.project_id, *cattail.pos.tolist(), cattail.group_id),
         )
 
     def close(self):
