@@ -79,10 +79,8 @@ class InProjectGui:
 
         self.simulator = Simulator()
         self.update_simulator()
-        self.chain_tool = ChainTool(
-            persistence, location_id, chain_size, 2.5 / chain_size
-        )
-        self.cattail_placer = CattailPlacer(persistence, location_id)
+        self.chain_tool = ChainTool(persistence, chain_size, 2.5 / chain_size)
+        self.cattail_placer = CattailPlacer(persistence)
 
         self.tool: Tool = self.simulator
 
@@ -103,14 +101,14 @@ class InProjectGui:
 
     @property
     def chains(self) -> list[Chain]:
-        chains = self.persistence.get_chains(self.location_id)
+        chains = self.persistence.get_chains()
         assert chains is not None
         return chains
 
     @property
     def cattails(self) -> list[Cattail]:
         assert self.location_id is not None
-        cattails = self.persistence.get_cattails(self.location_id)
+        cattails = self.persistence.get_cattails()
         assert cattails is not None
         return cattails
 

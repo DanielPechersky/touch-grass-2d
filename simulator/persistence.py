@@ -88,10 +88,10 @@ class Persistence:
         if row is not None:
             return row[0]
 
-    def get_chains(self, location_id: int) -> list[Chain[int]]:
+    def get_chains(self) -> list[Chain[int]]:
         rows = self.conn.execute(
-            "SELECT id, points FROM chains WHERE location_id = ? ORDER BY id",
-            (location_id,),
+            "SELECT id, points FROM chains WHERE project_id = ? ORDER BY id",
+            (self.project_id,),
         )
         return [
             Chain(id=row[0], points=np.array(json.loads(row[1]), dtype=np.float32))
@@ -110,16 +110,16 @@ class Persistence:
             (chain_id,),
         )
 
-    def append_chain(self, location_id: int, chain: Chain[None]):
+    def append_chain(self, chain: Chain[None]):
         self.conn.execute(
-            "INSERT INTO chains(location_id, points) VALUES(?, ?)",
-            (location_id, json.dumps(chain.points.tolist())),
+            "INSERT INTO chains(project_id, points) VALUES(?, ?)",
+            (self.project_id, json.dumps(chain.points.tolist())),
         )
 
-    def get_cattails(self, location_id: int) -> list[Cattail[int]]:
+    def get_cattails(self) -> list[Cattail[int]]:
         rows = self.conn.execute(
-            "SELECT id, x, y FROM cattails WHERE location_id = ? ORDER BY id",
-            (location_id,),
+            "SELECT id, x, y FROM cattails WHERE project_id = ? ORDER BY id",
+            (self.project_id,),
         )
         return [
             Cattail(id=row[0], pos=np.array([row[1], row[2]], dtype=np.float32))
@@ -132,10 +132,10 @@ class Persistence:
             (*cattail.pos.tolist(), cattail.id),
         )
 
-    def append_cattail(self, location_id: int, cattail: Cattail[None]):
+    def append_cattail(self, cattail: Cattail[None]):
         self.conn.execute(
-            "INSERT INTO cattails(location_id, x, y) VALUES(?, ?, ?)",
-            (location_id, *cattail.pos.tolist()),
+            "INSERT INTO cattails(project_id, x, y) VALUES(?, ?, ?)",
+            (self.project_id, *cattail.pos.tolist()),
         )
 
     def close(self):

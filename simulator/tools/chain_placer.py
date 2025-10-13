@@ -18,24 +18,20 @@ class ChainTool(Tool):
     def __init__(
         self,
         persistence: Persistence,
-        location_id: int,
         chain_size: int,
         spacing: float,
     ):
         self.persistence = persistence
-        self.location_id = location_id
         self.chain_size = chain_size
         self.spacing = spacing
 
         self.reset_selected_tool()
 
     def reset_selected_tool(self):
-        self.selected_tool: Update | ChainPlacer = Update(
-            self.persistence, self.location_id
-        )
+        self.selected_tool: Update | ChainPlacer = Update(self.persistence)
 
     def main_gui(self):
-        display_cattails(self.persistence.get_cattails(self.location_id))
+        display_cattails(self.persistence.get_cattails())
 
         self.selected_tool.main_gui()
 
@@ -45,12 +41,12 @@ class ChainTool(Tool):
             child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
         ):
             if imgui.radio_button("Move Chain", isinstance(self.selected_tool, Update)):
-                self.selected_tool = Update(self.persistence, self.location_id)
+                self.selected_tool = Update(self.persistence)
             if imgui.radio_button(
                 "Place Chain", isinstance(self.selected_tool, ChainPlacer)
             ):
                 self.selected_tool = ChainPlacer(
-                    self.persistence, self.location_id, self.chain_size, self.spacing
+                    self.persistence, self.chain_size, self.spacing
                 )
 
     def switched_away(self):
@@ -58,22 +54,19 @@ class ChainTool(Tool):
 
 
 class Update(Tool):
-    def __init__(self, persistence: Persistence, location_id: int):
+    def __init__(self, persistence: Persistence):
         self.persistence = persistence
-        self.location_id = location_id
 
         self.selected_chain_ids: list[int] = []
 
     @property
     def selected_chains(self) -> list[Chain[int]]:
         return [
-            c
-            for c in self.persistence.get_chains(self.location_id)
-            if c.id in self.selected_chain_ids
+            c for c in self.persistence.get_chains() if c.id in self.selected_chain_ids
         ]
 
     def main_gui(self):
-        chains = self.persistence.get_chains(self.location_id)
+        chains = self.persistence.get_chains()
 
         for chain in chains:
             center = chain.points.mean(axis=0)
@@ -116,12 +109,10 @@ class ChainPlacer(Tool):
     def __init__(
         self,
         persistence: Persistence,
-        location_id: int,
         chain_size: int,
         spacing: float,
     ):
         self.persistence = persistence
-        self.location_id = location_id
         self.chain_size = chain_size
         self.spacing = spacing
 
@@ -157,7 +148,7 @@ class ChainPlacer(Tool):
         return self.last_placed_point + vec
 
     def main_gui(self):
-        display_chains(self.persistence.get_chains(self.location_id))
+        display_chains(self.persistence.get_chains())
 
         plot_chain(
             "new_chain", self.current_chain, color=imgui.ImVec4(0.0, 0.8, 0.0, 1.0)
@@ -179,7 +170,6 @@ class ChainPlacer(Tool):
             result = self.current_chain
             self.current_chain = np.empty((0, 2), dtype=np.float32)  # type: ignore
             self.persistence.append_chain(
-                self.location_id,
                 Chain(id=None, points=result),
             )
 
