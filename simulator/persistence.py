@@ -9,6 +9,8 @@ from typing import Literal
 import numpy as np
 from PIL import Image
 
+from simulator.migrate_database import migrate_database
+
 type Scale = float
 """
 Pixels per metre
@@ -32,40 +34,10 @@ class Persistence:
         self.db = db
         # Autocommit mode (isolation_level=None) so individual statements persist immediately
         self.conn = sqlite3.connect(self.db, autocommit=True)
-        self.init_db()
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        migrate_database(self.conn)
 
         self.project_id = self.get_or_create_project()
-
-    def init_db(self):
-        self.conn.executescript(
-            """
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE IF NOT EXISTS project (
-                id INTEGER PRIMARY KEY AUTOINCREMENT
-            ) STRICT;
-            CREATE TABLE IF NOT EXISTS location (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER NOT NULL,
-                image BLOB NOT NULL,
-                -- scale is in terms of pixels per metre
-                scale REAL NOT NULL,
-                FOREIGN KEY(project_id) REFERENCES project(id) ON DELETE CASCADE
-            ) STRICT;
-            CREATE TABLE IF NOT EXISTS chains (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                location_id INTEGER NOT NULL,
-                points TEXT NOT NULL,
-                FOREIGN KEY(location_id) REFERENCES location(id) ON DELETE CASCADE
-            ) STRICT;
-            CREATE TABLE IF NOT EXISTS cattails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                location_id INTEGER NOT NULL,
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                FOREIGN KEY(location_id) REFERENCES location(id) ON DELETE CASCADE
-            ) STRICT;
-            """
-        )
 
     def get_or_create_project(self) -> int:
         if (project := self.get_project()) is not None:
