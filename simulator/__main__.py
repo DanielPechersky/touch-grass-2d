@@ -1,4 +1,4 @@
-from imgui_bundle import hello_imgui
+from imgui_bundle import hello_imgui, immapp
 
 from simulator.gui import Gui
 
@@ -11,4 +11,7 @@ runner_params.imgui_window_params.show_menu_bar = True
 runner_params.imgui_window_params.show_menu_app = False
 runner_params.imgui_window_params.show_menu_view = False
 
-hello_imgui.run(runner_params)
+addons_params = immapp.AddOnsParams()
+addons_params.with_node_editor = True
+
+immapp.run(runner_params, addons_params)

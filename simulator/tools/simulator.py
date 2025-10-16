@@ -10,12 +10,8 @@ from simulator.helpers import (
 )
 from simulator.light_effect import (
     CattailContext,
-    LightEffect,
-    ProjectileLightEffect,
-    PulseLightEffect,
-    PulseLightEffect2,
-    TestLightEffect,
 )
+from simulator.light_effect_node_editor import Editor, SceneContext
 from simulator.persistence import Cattail, Chain
 from simulator.tools import Tool
 
@@ -26,10 +22,10 @@ class Simulator(Tool):
     ):
         self.set_chains([])
         self.set_cattails([])
-        self.selected_light_effect_name = next(iter(self.light_effects.keys()), None)
-        self.update_selected_light_effect()
 
         self.light_effect_debug_gui = False
+
+        self.editor = Editor()
 
     def set_chains(self, chains: list[Chain]):
         self.chains: list[Chain] = chains
@@ -41,61 +37,45 @@ class Simulator(Tool):
             cattail_centers = np.empty((0, 2), dtype=np.float32)
         self.cattail_physics = CattailPhysics(cattail_centers)  # type: ignore
 
-    @property
-    def light_effects(self):
-        return {
-            "Pulse": PulseLightEffect(),
-            "Pulse 2": PulseLightEffect2(),
-            "Projectile": ProjectileLightEffect(),
-            "Test": TestLightEffect(),
-        }
-
-    def update_selected_light_effect(self):
-        if self.selected_light_effect_name is not None:
-            self.selected_light_effect: LightEffect | None = self.light_effects[
-                self.selected_light_effect_name
-            ]
-
     def main_gui(self):
         hello_imgui_set_idling(False)
+
+        with imgui_ctx.begin("Effect Nodes"):
+            self.editor.gui()
 
         delta_time = imgui.get_io().delta_time
         accelerations = self.cattail_physics.update_cattails(delta_time)
 
         self.plot_cattails()
 
-        if self.selected_light_effect is not None and len(self.chains) > 0:
-            try:
-                if self.light_effect_debug_gui:
-                    self.selected_light_effect.debug_gui()
-                chain_brightness = (
-                    self.selected_light_effect.calculate_chain_brightness(
-                        delta_time=delta_time,
-                        chains=self.chains,
-                        cattail_context=CattailContext(
-                            centers=self.cattail_physics.cattail_centers,
-                            accelerations=accelerations,
-                        ),
-                    )
+        try:
+            context = SceneContext(
+                chains=self.chains,
+                cattail_context=CattailContext(
+                    centers=self.cattail_physics.cattail_centers,
+                    accelerations=accelerations,
+                ),
+            )
+            self.editor.plot_gui()
+            chain_brightness = self.editor.execute(context)
+            if chain_brightness is None:
+                chain_brightness = np.zeros((len(self.chains),), dtype=np.float32)
+
+            assert (0 <= chain_brightness).all() and (chain_brightness <= 1).all()
+
+            for chain, brightness in zip(self.chains, chain_brightness, strict=True):
+                brightness = brightness.item()
+                implot.set_next_marker_style(
+                    size=brightness * 5 + 3,
+                    fill=imgui.ImVec4(brightness, brightness, 0.1, 1),
                 )
-
-                assert (0 <= chain_brightness).all() and (chain_brightness <= 1).all()
-
-                for chain, brightness in zip(
-                    self.chains, chain_brightness, strict=True
-                ):
-                    brightness = brightness.item()
-                    implot.set_next_marker_style(
-                        size=brightness * 5 + 3,
-                        fill=imgui.ImVec4(brightness, brightness, 0.1, 1),
-                    )
-                    implot.plot_scatter(
-                        "chain_brightness",
-                        *ndarray_to_scatter_many(chain.points),
-                    )
-            except Exception:
-                print("Error in light effect")
-                traceback.print_exc()
+                implot.plot_scatter(
+                    "chain_brightness",
+                    *ndarray_to_scatter_many(chain.points),
+                )
+        except Exception:
+            print("Error in light effect")
+            traceback.print_exc()
 
     def plot_cattails(self):
         for center, position in zip(
@@ -113,23 +93,9 @@ class Simulator(Tool):
             *ndarray_to_scatter_many(self.cattail_physics.cattail_positions),
         )
 
-    def sidebar_gui(self):
-        with imgui_ctx.begin_child(
-            "Light Effect",
-            child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
-        ):
-            imgui.separator_text("Light Effect")
-            for name in self.light_effects.keys():
-                if imgui.radio_button(name, self.selected_light_effect_name == name):
-                    self.selected_light_effect_name = name
-                    self.update_selected_light_effect()
-
-            _, self.light_effect_debug_gui = imgui.checkbox(
-                "Light Effect Debug", self.light_effect_debug_gui
-            )
-
     def switched_away(self):
         self.cattail_physics.reset()
+        self.editor = Editor()
         hello_imgui_set_idling(True)
 
 
