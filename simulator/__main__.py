@@ -13,5 +13,6 @@ runner_params.imgui_window_params.show_menu_view = False
 
 addons_params = immapp.AddOnsParams()
 addons_params.with_node_editor = True
+addons_params.with_implot = True
 
 immapp.run(runner_params, addons_params)

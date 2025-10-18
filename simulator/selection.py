@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import NewType
 
 from simulator.persistence import Cattail, Chain
 
@@ -24,4 +23,4 @@ def id_for_item(item: Cattail[int] | Chain[int]) -> CattailId | ChainId:
             raise ValueError(f"Unknown item type: {type(item)}")
 
 
-Selection = NewType("Selection", set[CattailId | ChainId])
+type Selection = set[CattailId | ChainId]

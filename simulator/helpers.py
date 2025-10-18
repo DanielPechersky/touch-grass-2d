@@ -71,8 +71,20 @@ def implot_draw_circle(
     draw_list.add_circle_filled(
         center=center_pixels,
         radius=radius_pixels,
-        # col=0x33FF0000,
         **kwargs,
+    )
+
+
+def implot_draw_rectangle(
+    bottom_left: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]],
+    top_right: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]],
+    **kwargs,
+):
+    bottom_left_pixels = implot.plot_to_pixels(*bottom_left.tolist())  # type: ignore
+    top_right_pixels = implot.plot_to_pixels(*top_right.tolist())  # type: ignore
+    draw_list = implot.get_plot_draw_list()
+    draw_list.add_rect_filled(
+        p_min=bottom_left_pixels, p_max=top_right_pixels, **kwargs
     )
 
 

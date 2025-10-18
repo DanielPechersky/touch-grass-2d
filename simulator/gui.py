@@ -1,15 +1,18 @@
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
+import numpy as np
 from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
 from PIL import Image
 
 from simulator.chain_menu import chain_menu
 from simulator.gl_texture import GlTexture
+from simulator.helpers import implot_draw_rectangle, point_to_ndarray
 from simulator.measurer import Measurer
 from simulator.persistence import Cattail, Chain, Persistence
-from simulator.selection import Selection
+from simulator.selection import CattailId, ChainId, Selection
 from simulator.tools import Tool
 from simulator.tools.cattail_placer import CattailPlacer
 from simulator.tools.chain_placer import ChainTool
@@ -85,7 +88,12 @@ class InProjectGui:
         self.cattail_placer = CattailPlacer(persistence)
 
         self.tool: Tool = self.simulator
-        self.selection = Selection(set())
+        self.selection: Selection = set()
+
+        self.box_selecting = False
+        self.box_selection_start: (
+            np.ndarray[tuple[Literal[2]], np.dtype[np.floating]] | None
+        ) = None
 
     def update_simulator(self):
         self.simulator.set_chains(self.chains)
@@ -157,9 +165,16 @@ class InProjectGui:
         with implot_begin_plot(
             "Exhibit simulator",
             size,
-            flags=implot.Flags_.no_legend | implot.Flags_.equal,
+            flags=implot.Flags_.equal
+            | implot.Flags_.no_legend
+            | implot.Flags_.no_title,
         ):
-            implot.setup_axes("x (metres)", "y (metres)")
+            axis_flags = (
+                implot.AxisFlags_.no_decorations | implot.AxisFlags_.no_highlight
+            )
+            implot.setup_axes(
+                "x (metres)", "y (metres)", x_flags=axis_flags, y_flags=axis_flags
+            )
 
             axes = self.axes_limits
             if axes is not None:
@@ -178,12 +193,63 @@ class InProjectGui:
             if imgui.is_key_pressed(imgui.Key.escape):
                 self.tool.switched_away()
 
+            box_selection_mouse_button = imgui.MouseButton_.left
+            if implot.is_plot_hovered() and imgui.is_mouse_clicked(
+                box_selection_mouse_button
+            ):
+                self.box_selection_start = point_to_ndarray(implot.get_plot_mouse_pos())
+
+            if (
+                imgui.is_mouse_released(box_selection_mouse_button)
+                and self.box_selecting
+            ):
+                box_selection_end = point_to_ndarray(implot.get_plot_mouse_pos())
+                box_selection = np.stack([self.box_selection_start, box_selection_end])
+                box_selection_min = box_selection.min(axis=0)
+                box_selection_max = box_selection.max(axis=0)
+
+                box_selected_chains = []
+                for chain in self.chains:
+                    if np.any(
+                        np.all((box_selection_min < chain.points), axis=1)
+                        & np.all((chain.points < box_selection_max), axis=1)
+                    ):
+                        box_selected_chains.append(chain.id)
+
+                box_selected_cattails = []
+                for cattail in self.cattails:
+                    if np.all(
+                        (box_selection_min < cattail.pos)
+                        & (cattail.pos < box_selection_max)
+                    ):
+                        box_selected_cattails.append(cattail.id)
+
+                self.selection = set(map(ChainId, box_selected_chains)) | set(
+                    map(CattailId, box_selected_cattails)
+                )
+
+            if implot.is_plot_hovered() and imgui.is_mouse_dragging(
+                box_selection_mouse_button
+            ):
+                self.box_selecting = True
+            else:
+                self.box_selecting = False
+
+            if self.box_selecting and self.box_selection_start is not None:
+                box_selection_end = point_to_ndarray(implot.get_plot_mouse_pos())
+                implot_draw_rectangle(
+                    self.box_selection_start, box_selection_end, col=0x40FF0000
+                )
+
             self.tool.main_gui()
 
 
-def disable_double_click_to_fit():
+def configure_implot():
     map = implot.get_input_map()
     map.fit = -1
+    map.menu = -1
+    map.pan = imgui.MouseButton_.right
+    map.select_mod = imgui.Key.mod_ctrl
 
 
 class ProjectPicker:
@@ -274,7 +340,7 @@ class Gui:
         self.add_image_gui: AddImageGui | None = None
         self.in_project_gui: InProjectGui | None = None
 
-        self.created_context = False
+        self.configured_implot = False
 
     def menu_bar(self):
         with imgui_ctx.begin_main_menu_bar():
@@ -289,10 +355,9 @@ class Gui:
         try:
             self.menu_bar()
 
-            if not self.created_context:
-                implot.create_context()
-                disable_double_click_to_fit()
-                self.created_context = True
+            if not self.configured_implot:
+                configure_implot()
+                self.configured_implot = True
 
             if (
                 self.persistence is None
