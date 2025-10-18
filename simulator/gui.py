@@ -81,7 +81,7 @@ class InProjectGui:
 
         self.simulator = Simulator()
         self.update_simulator()
-        self.chain_tool = ChainTool(persistence, chain_size, 2.5 / chain_size)
+        self.chain_tool = ChainTool(persistence, chain_size, 2.0 / chain_size)
         self.cattail_placer = CattailPlacer(persistence)
 
         self.tool: Tool = self.simulator
