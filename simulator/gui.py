@@ -9,7 +9,12 @@ from PIL import Image
 
 from simulator.chain_menu import chain_menu
 from simulator.gl_texture import GlTexture
-from simulator.helpers import implot_draw_rectangle, point_to_ndarray
+from simulator.helpers import (
+    implot_draw_rectangle,
+    ndarray_to_scatter,
+    plot_chain,
+    point_to_ndarray,
+)
 from simulator.measurer import Measurer
 from simulator.persistence import Cattail, Chain, Persistence
 from simulator.selection import CattailId, ChainId, Selection
@@ -152,6 +157,23 @@ class InProjectGui:
             ):
                 self.selection = chain_menu(self.persistence, self.selection)
 
+    def show_selection(self):
+        for chain in self.chains:
+            if ChainId(chain.id) in self.selection:
+                plot_chain(
+                    "selected_chain",
+                    chain.points,
+                    color=imgui.ImVec4(0.0, 0.0, 1.0, 1.0),
+                )
+        for cattail in self.cattails:
+            if CattailId(cattail.id) in self.selection:
+                implot.set_next_marker_style(
+                    size=5, fill=imgui.ImVec4(0.0, 0.0, 1.0, 1.0)
+                )
+                implot.plot_scatter(
+                    "selected_cattail", *ndarray_to_scatter(cattail.pos)
+                )
+
     def gui(self):
         if self.texture is None:
             img = self.persistence.get_image(self.location_id)
@@ -191,6 +213,8 @@ class InProjectGui:
                 ),
             )
 
+            self.show_selection()
+
             if imgui.is_key_pressed(imgui.Key.escape):
                 self.tool.switched_away()
 
@@ -198,6 +222,7 @@ class InProjectGui:
             if implot.is_plot_hovered() and imgui.is_mouse_clicked(
                 box_selection_mouse_button
             ):
+                self.selection = set()
                 self.box_selection_start = point_to_ndarray(implot.get_plot_mouse_pos())
 
             if (
