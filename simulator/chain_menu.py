@@ -2,11 +2,9 @@ from typing import Generator
 
 from imgui_bundle import imgui
 
+from simulator.helpers import ChildrenTree, group_children
 from simulator.persistence import Cattail, Chain, Group, Persistence
 from simulator.selection import CattailId, ChainId, Selection, id_for_item
-
-type GroupChild = Group[int] | Chain[int] | Cattail[int]
-type ChildrenTree = dict[int | None, list[GroupChild]]
 
 
 def chain_menu(persistence: Persistence, selection: Selection) -> Selection:
@@ -138,12 +136,12 @@ class ChainMenu:
         for request in requests:
             if request.type == imgui.SelectionRequestType.set_all:
                 if request.selected:
-                    self.selection = Selection(
-                        {CattailId(cattail.id) for cattail in self.cattails}
-                        | {ChainId(chain.id) for chain in self.chains},
-                    )
+                    self.selection = {
+                        CattailId(cattail.id) for cattail in self.cattails
+                    } | {ChainId(chain.id) for chain in self.chains}
+
                 else:
-                    self.selection = Selection(set())
+                    self.selection = set()
             elif request.type == imgui.SelectionRequestType.set_range:
                 matching_items = self.flattened_children[
                     request.range_first_item : request.range_last_item + 1
@@ -163,24 +161,6 @@ class ChainMenu:
                 case Chain() | Cattail():
                     count += 1
         return count
-
-
-def group_children(
-    groups: list[Group[int]], chains: list[Chain[int]], cattails: list[Cattail[int]]
-) -> ChildrenTree:
-    children: ChildrenTree = {g.id: [] for g in groups}
-    children[None] = []
-
-    for group in groups:
-        children[group.parent_group_id].append(group)
-
-    for cattail in cattails:
-        children[cattail.group_id].append(cattail)
-
-    for chain in chains:
-        children[chain.group_id].append(chain)
-
-    return children
 
 
 def flatten_tree(

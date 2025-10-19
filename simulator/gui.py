@@ -98,6 +98,7 @@ class InProjectGui:
     def update_simulator(self):
         self.simulator.set_chains(self.chains)
         self.simulator.set_cattails(self.cattails)
+        self.simulator.set_groups(self.persistence.get_groups())
 
     @property
     def axes_limits(self):
@@ -203,6 +204,7 @@ class InProjectGui:
                 imgui.is_mouse_released(box_selection_mouse_button)
                 and self.box_selecting
             ):
+                assert self.box_selection_start is not None
                 box_selection_end = point_to_ndarray(implot.get_plot_mouse_pos())
                 box_selection = np.stack([self.box_selection_start, box_selection_end])
                 box_selection_min = box_selection.min(axis=0)

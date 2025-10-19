@@ -1,12 +1,13 @@
 import traceback
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol, Self
 
 import numpy as np
 from imgui_bundle import imgui, imgui_ctx
 from imgui_bundle import imgui_node_editor as ed
 from imgui_bundle import imgui_node_editor_ctx as ed_ctx
 
+from simulator.helpers import ChildrenTree, children_under_group, group_children
 from simulator.light_effect import (
     CattailContext,
     LightEffect,
@@ -15,13 +16,77 @@ from simulator.light_effect import (
     PulseLightEffect2,
     TestLightEffect,
 )
-from simulator.persistence import Chain
+from simulator.persistence import Cattail, Chain, Group
+
+
+class SceneContext:
+    def __init__(
+        self,
+        chains: list[Chain[int]],
+        cattails: list[Cattail[int]],
+        groups: list[Group[int]],
+        cattail_accelerations: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ],
+    ):
+        self.chains: list[Chain[int]] = chains
+        self.cattails: list[Cattail[int]] = cattails
+        self.groups: list[Group[int]] = groups
+        self.cattail_accelerations: np.ndarray[
+            tuple[int, Literal[2]], np.dtype[np.floating]
+        ] = cattail_accelerations
+
+        self.child_tree: ChildrenTree = group_children(groups, chains, cattails)
+
+    def scoped_to_group(
+        self,
+        group_id: int,
+        filter_chains: bool,
+        filter_cattails: bool,
+        filter_groups: bool = False,
+    ) -> Self:
+        groups = []
+        chains = []
+        cattails = []
+        for child in children_under_group(self.child_tree, group_id):
+            match child:
+                case Group() as g:
+                    groups.append(g)
+                case Chain() as c:
+                    chains.append(c)
+                case Cattail() as c:
+                    cattails.append(c)
+
+        cattail_ids = np.sort([c.id for c in self.cattails])
+        new_cattail_ids = np.sort([c.id for c in cattails])
+
+        accelerations = self.cattail_accelerations[
+            np.searchsorted(cattail_ids, new_cattail_ids)
+        ]
+
+        if not filter_chains:
+            chains = self.chains
+        if not filter_cattails:
+            cattails = self.cattails
+            accelerations = self.cattail_accelerations
+        if not filter_groups:
+            groups = self.groups
+
+        return SceneContext(chains, cattails, groups, accelerations)  # type: ignore
+
+    def cattail_centers(self):
+        if len(self.cattails) == 0:
+            return np.zeros((0, 2), dtype=np.float32)
+        return np.stack([cattail.pos for cattail in self.cattails])
+
+    def chain_ids(self):
+        return np.sort(np.array([chain.id for chain in self.chains]))
 
 
 @dataclass
-class SceneContext:
-    chains: list[Chain[Any]]
-    cattail_context: CattailContext
+class Brightness:
+    values: np.ndarray[tuple[int], np.dtype[np.floating]]
+    chain_ids: np.ndarray[tuple[int], np.dtype[np.integer]]
 
 
 @dataclass(frozen=True)
@@ -109,7 +174,9 @@ class Node:
     def plot_gui(self) -> None:
         pass
 
-    def run(self, inputs: dict[PinId, list[Any]]) -> dict[PinId, Any]:
+    def run(
+        self, inputs: dict[PinId, Any]
+    ) -> Mapping[PinId, Brightness | SceneContext]:
         raise NotImplementedError
 
 
@@ -140,10 +207,31 @@ class SourceNode(Node):
         return {self.output_pin: self.context}
 
 
+def combine_brightnesses(*brightnesses: Brightness) -> Brightness:
+    if not brightnesses:
+        return Brightness(
+            values=np.zeros((0,), dtype=np.float32),
+            chain_ids=np.zeros((0,), dtype=np.int32),
+        )
+
+    all_chain_ids = np.concatenate([b.chain_ids for b in brightnesses])
+    all_chain_ids = np.unique(all_chain_ids)
+
+    result_values = np.zeros((len(all_chain_ids),), dtype=np.float32)
+
+    for brightness in brightnesses:
+        result_indices = np.searchsorted(all_chain_ids, brightness.chain_ids)
+        np.add.at(result_values, result_indices, brightness.values)
+
+    result_values = np.clip(result_values, 0.0, 1.0)
+
+    return Brightness(values=result_values, chain_ids=all_chain_ids)
+
+
 class DestinationNode(Node):
     def __init__(self, id: int):
         super().__init__(id)
-        self.brightness: np.ndarray | None = None
+        self.brightness: Brightness | None = None
 
         self.input_pin = PinId(self.id, "input")
 
@@ -159,7 +247,7 @@ class DestinationNode(Node):
         draw_pins(pin_ids, self.pins())
 
     def run(self, inputs):
-        self.brightness = np.clip(sum(inputs[self.input_pin]), 0.0, 1.0)
+        self.brightness = inputs[self.input_pin]
         return {}
 
 
@@ -176,13 +264,17 @@ class AlwaysBrightNode(Node):
             self.output_pin: PinType("output", "brightness"),
         }
 
-    def gui(self, pin_ids) -> None:
+    def gui(self, pin_ids):
         imgui.text("Always Bright")
         draw_pins(pin_ids, self.pins())
 
-    def run(self, inputs) -> dict[PinId, Any]:
-        context: SceneContext = inputs[self.input_pin][0]
-        return {self.output_pin: np.ones((len(context.chains),), dtype=np.float32)}
+    def run(self, inputs):
+        context: SceneContext = inputs[self.input_pin]
+        brightness = Brightness(
+            values=np.ones((len(context.chains),), dtype=np.float32),
+            chain_ids=context.chain_ids(),
+        )
+        return {self.output_pin: brightness}
 
 
 class InvertNode(Node):
@@ -203,8 +295,9 @@ class InvertNode(Node):
         draw_pins(pin_ids, self.pins())
 
     def run(self, inputs) -> dict[PinId, Any]:
-        brightness: np.ndarray = inputs[self.input_pin][0]
-        return {self.output_pin: 1.0 - brightness}
+        brightness: Brightness = inputs[self.input_pin]
+        brightness.values = 1.0 - brightness.values
+        return {self.output_pin: brightness}
 
 
 class DimNode(Node):
@@ -233,8 +326,9 @@ class DimNode(Node):
         draw_pins(pin_ids, self.pins())
 
     def run(self, inputs) -> dict[PinId, Any]:
-        brightness: np.ndarray = np.clip(sum(inputs[self.input_pin]), 0.0, 1.0)
-        return {self.output_pin: brightness * self.brightness}
+        brightness: Brightness = inputs[self.input_pin]
+        brightness.values *= self.brightness
+        return {self.output_pin: brightness}
 
 
 class LightEffectNode(Node):
@@ -284,14 +378,87 @@ class LightEffectNode(Node):
             self.selected_light_effect.debug_gui()
 
     def run(self, inputs) -> dict[PinId, Any]:
-        context: SceneContext = inputs[self.input_pin][0]
+        context: SceneContext = inputs[self.input_pin]
         if self.selected_light_effect is None:
             brightness = np.zeros((len(context.chains),), dtype=np.float32)
         else:
             brightness = self.selected_light_effect.calculate_chain_brightness(
-                imgui.get_io().delta_time, context.chains, context.cattail_context
+                imgui.get_io().delta_time,
+                context.chains,
+                CattailContext(
+                    centers=context.cattail_centers(),
+                    accelerations=context.cattail_accelerations,
+                ),
             )
-        return {self.output_pin: brightness}
+        indices = np.array([c.id for c in context.chains])
+        return {self.output_pin: Brightness(brightness, indices)}
+
+
+class FilterByGroupNode(Node):
+    def __init__(self, id: int):
+        super().__init__(id)
+
+        self.input_pin = PinId(self.id, "input")
+        self.output_pin = PinId(self.id, "output")
+
+        self.group_id: str = ""
+        self.group_id_not_found = False
+
+        self.filter_chains = True
+        self.filter_cattails = True
+
+    def pins(self):
+        return {
+            self.input_pin: PinType("input", "scene_context"),
+            self.output_pin: PinType("output", "scene_context"),
+        }
+
+    def gui(self, pin_ids):
+        imgui.text("Filter By Group")
+        imgui.set_next_item_width(50)
+        set, value = imgui.input_text(f"Group ID##{self.id}Group ID", self.group_id)
+        if set:
+            self.group_id = value
+        if not self.is_group_id_format_valid:
+            imgui.text_colored(imgui.ImVec4(1, 0, 0, 1), "Invalid group ID")
+        elif self.group_id_not_found:
+            imgui.text_colored(imgui.ImVec4(1, 0, 0, 1), "Group ID not found")
+        self.filter_chains = imgui.checkbox(
+            f"Filter Chains##{self.id}Filter Chains", self.filter_chains
+        )[1]
+        self.filter_cattails = imgui.checkbox(
+            f"Filter Cattails##{self.id}Filter Cattails", self.filter_cattails
+        )[1]
+
+        draw_pins(pin_ids, self.pins())
+
+    @property
+    def is_group_id_format_valid(self):
+        return self.parsed_group_id is not None
+
+    @property
+    def parsed_group_id(self) -> int | None:
+        if not self.group_id.startswith("g_"):
+            return None
+        try:
+            return int(self.group_id[2:])
+        except ValueError:
+            return None
+
+    def run(self, inputs):
+        scene_context = inputs[self.input_pin]
+        if (group_id := self.parsed_group_id) is None:
+            pass
+        elif group_id not in {g.id for g in scene_context.groups}:
+            self.group_id_not_found = True
+        else:
+            self.group_id_not_found = False
+            scene_context = scene_context.scoped_to_group(
+                group_id,
+                filter_chains=self.filter_chains,
+                filter_cattails=self.filter_cattails,
+            )
+        return {self.output_pin: scene_context}
 
 
 class EditorIdProtocol(Protocol):
@@ -323,6 +490,7 @@ def addable_node_types(id: int) -> dict[str, Node]:
         "Invert": InvertNode(id),
         "Light Effect": LightEffectNode(id),
         "Dim": DimNode(id),
+        "Filter by Group": FilterByGroupNode(id),
     }
 
 
@@ -355,9 +523,7 @@ class Editor:
         self.source_node.set_context(context)
         self.destination_node.brightness = None
 
-        ready_nodes: set[Node] = {self.source_node}
-
-        input_values: dict[PinId, list[Any]] = {}
+        input_values: dict[PinId, Brightness | SceneContext] = {}
 
         fulfilled_links: set[Link] = set[Link]()
         links_by_start_node: dict[int, list[Link]] = {}
@@ -368,17 +534,39 @@ class Editor:
         for link in self.links:
             links_by_end_node.setdefault(link.end.node_id, []).append(link)
 
+        ready_nodes: set[Node] = {self.source_node}
         while ready_nodes:
             node = ready_nodes.pop()
 
-            node_input_values = {
-                pin_id: input_values.get(pin_id, []) for pin_id in node.pins()
-            }
+            try:
+                node_input_values = {
+                    pin_id: input_values[pin_id]
+                    for pin_id, pin_type in node.pins().items()
+                    if pin_type.type == "input"
+                }
+            except KeyError:
+                continue
+
             output_values = node.run(node_input_values)
 
             for link in links_by_start_node.get(node.id, []):
                 output_value = output_values[link.start]
-                input_values.setdefault(link.end, []).append(output_value)
+                link_data_type = node.pins()[link.start].data
+                match link_data_type:
+                    case "brightness":
+                        assert isinstance(output_value, Brightness)
+                        if (b := input_values.get(link.end)) is not None:
+                            assert isinstance(b, Brightness)
+                            output_value = combine_brightnesses(output_value, b)
+                        input_values[link.end] = output_value
+                    case "scene_context":
+                        if link.end in input_values:
+                            print(
+                                "Warning, assigning multiple scene contexts to one pin"
+                            )
+                        else:
+                            input_values[link.end] = output_value
+
                 fulfilled_links.add(link)
 
                 target_node = self.nodes[link.end.node_id]
@@ -389,8 +577,14 @@ class Editor:
                 if all_links_to_target_fulfilled:
                     ready_nodes.add(target_node)
 
-        brightness = self.destination_node.brightness
-        return brightness
+        brightness: Brightness | None = self.destination_node.brightness
+        if brightness is None:
+            return None
+        original_ids = context.chain_ids()
+        final_brightness = np.zeros(original_ids.shape, dtype=np.float32)
+        indices = np.searchsorted(original_ids, brightness.chain_ids)
+        final_brightness[indices] = brightness.values
+        return final_brightness
 
     def gui(self):
         try:

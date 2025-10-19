@@ -1,9 +1,9 @@
-from typing import Literal
+from typing import Generator, Literal
 
 import numpy as np
 from imgui_bundle import imgui, implot
 
-from simulator.persistence import Cattail, Chain
+from simulator.persistence import Cattail, Chain, Group
 
 
 def display_chains(chains: list[Chain]):
@@ -92,3 +92,37 @@ def plot_line_length_to_pixel_line_length(line_length: float) -> imgui.ImVec2:
     p1 = implot.plot_to_pixels(0, 0)
     p2 = implot.plot_to_pixels(line_length, line_length)
     return p2 - p1
+
+
+type GroupChild = Group[int] | Chain[int] | Cattail[int]
+type ChildrenTree = dict[int | None, list[GroupChild]]
+
+
+def group_children(
+    groups: list[Group[int]], chains: list[Chain[int]], cattails: list[Cattail[int]]
+) -> ChildrenTree:
+    children: ChildrenTree = {}
+
+    for group in groups:
+        children.setdefault(group.parent_group_id, []).append(group)
+        children.setdefault(group.id, [])
+
+    for cattail in cattails:
+        children.setdefault(cattail.group_id, []).append(cattail)
+
+    for chain in chains:
+        children.setdefault(chain.group_id, []).append(chain)
+
+    return children
+
+
+def children_under_group(
+    tree: ChildrenTree, group_id: int | None
+) -> Generator[GroupChild]:
+    for child in tree[group_id]:
+        match child:
+            case Group() as group:
+                yield group
+                yield from children_under_group(tree, group.id)
+            case Chain() | Cattail() as child:
+                yield child

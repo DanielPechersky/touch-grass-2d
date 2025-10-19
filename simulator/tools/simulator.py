@@ -8,11 +8,8 @@ from simulator.helpers import (
     ndarray_to_scatter_many,
     point_to_ndarray,
 )
-from simulator.light_effect import (
-    CattailContext,
-)
 from simulator.light_effect_node_editor import Editor, SceneContext
-from simulator.persistence import Cattail, Chain
+from simulator.persistence import Cattail, Chain, Group
 from simulator.tools import Tool
 
 
@@ -22,20 +19,25 @@ class Simulator(Tool):
     ):
         self.set_chains([])
         self.set_cattails([])
+        self.set_groups([])
 
         self.light_effect_debug_gui = False
 
         self.editor = Editor()
 
-    def set_chains(self, chains: list[Chain]):
-        self.chains: list[Chain] = chains
+    def set_chains(self, chains: list[Chain[int]]):
+        self.chains: list[Chain[int]] = chains
 
-    def set_cattails(self, cattails: list[Cattail]):
+    def set_cattails(self, cattails: list[Cattail[int]]):
+        self.cattails: list[Cattail[int]] = cattails
         if cattails:
             cattail_centers = np.stack([cattail.pos for cattail in cattails])
         else:
             cattail_centers = np.empty((0, 2), dtype=np.float32)
         self.cattail_physics = CattailPhysics(cattail_centers)  # type: ignore
+
+    def set_groups(self, groups: list[Group[int]]):
+        self.groups: list[Group[int]] = groups
 
     def main_gui(self):
         hello_imgui_set_idling(False)
@@ -51,10 +53,9 @@ class Simulator(Tool):
         try:
             context = SceneContext(
                 chains=self.chains,
-                cattail_context=CattailContext(
-                    centers=self.cattail_physics.cattail_centers,
-                    accelerations=accelerations,
-                ),
+                cattails=self.cattails,
+                groups=self.groups,
+                cattail_accelerations=accelerations,
             )
             self.editor.plot_gui()
             chain_brightness = self.editor.execute(context)
