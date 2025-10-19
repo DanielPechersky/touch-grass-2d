@@ -21,6 +21,7 @@ from simulator.selection import CattailId, ChainId, Selection
 from simulator.tools import Tool
 from simulator.tools.cattail_placer import CattailPlacer
 from simulator.tools.chain_placer import ChainTool
+from simulator.tools.move import MoveTool
 from simulator.tools.simulator import Simulator
 
 
@@ -89,6 +90,7 @@ class InProjectGui:
 
         self.simulator = Simulator()
         self.update_simulator()
+        self.move_tool = MoveTool(persistence)
         self.chain_tool = ChainTool(persistence, chain_size, 2.0 / chain_size)
         self.cattail_placer = CattailPlacer(persistence)
 
@@ -140,6 +142,9 @@ class InProjectGui:
                     self.tool.switched_away()
                     self.update_simulator()
                     self.tool = self.simulator
+                if imgui.radio_button("Move", isinstance(self.tool, MoveTool)):
+                    self.tool.switched_away()
+                    self.tool = self.move_tool
                 if imgui.radio_button("Place chain", isinstance(self.tool, ChainTool)):
                     self.tool.switched_away()
                     self.tool = self.chain_tool
@@ -302,6 +307,7 @@ class InProjectGui:
                 implot_draw_rectangle(
                     self.box_selection_start, box_selection_end, col=0x40FF0000
                 )
+            self.move_tool.update_selection(self.selection)
 
             self.tool.main_gui()
 

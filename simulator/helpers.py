@@ -94,6 +94,12 @@ def plot_line_length_to_pixel_line_length(line_length: float) -> imgui.ImVec2:
     return p2 - p1
 
 
+def pixel_line_length_to_plot_line_length(line_length: float) -> implot.Point:
+    p1 = implot.pixels_to_plot(0, 0)
+    p2 = implot.pixels_to_plot(line_length, line_length)
+    return implot.Point(p2.x - p1.x, p2.y - p1.y)
+
+
 type GroupChild = Group[int] | Chain[int] | Cattail[int]
 type ChildrenTree = dict[int | None, list[GroupChild]]
 
