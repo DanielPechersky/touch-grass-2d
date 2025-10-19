@@ -66,25 +66,119 @@ class TestLightEffect(LightEffect):
         return (time_brightness + acceleration_brightness) / 2
 
 
+class PulsePhysics:
+    def __init__(self):
+        self.accumulated_time = 0.0
+        self.start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+        self.centers: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
+            np.zeros((0, 2), dtype=np.float32)
+        )  # type: ignore
+        self.sizes: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+        self.speeds: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+
+    def update(self, delta_time: float, expire_older_than: float):
+        self.accumulated_time += delta_time
+        self.sizes += self.speeds * delta_time
+        self.expire_pulses(expire_older_than)
+
+    def add_pulses(
+        self,
+        new_centers: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+        new_sizes: np.ndarray[tuple[int], np.dtype[np.floating]],
+        new_speeds: np.ndarray[tuple[int], np.dtype[np.floating]],
+    ):
+        self.start_times = np.concatenate(
+            (
+                self.start_times,
+                np.full((new_centers.shape[0],), self.accumulated_time),
+            )
+        )
+        self.centers = np.concatenate((self.centers, new_centers))
+        self.sizes = np.concatenate((self.sizes, new_sizes))
+        self.speeds = np.concatenate((self.speeds, new_speeds))
+
+    def expire_pulses(self, older_than: float = 5.0):
+        alive_mask = self.ages < older_than
+        self.start_times = self.start_times[alive_mask]
+        self.centers = self.centers[alive_mask]
+        self.sizes = self.sizes[alive_mask]
+        self.speeds = self.speeds[alive_mask]
+
+    @property
+    def ages(self) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
+        return self.accumulated_time - self.start_times
+
+    def debug_gui(self):
+        for position, size in zip(self.centers, self.sizes, strict=True):
+            implot_draw_circle(center=position, radius=size.item(), col=0x33FF0000)
+
+
+class ProjectilePhysics:
+    def __init__(self):
+        self.accumulated_time = 0.0
+        self.start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+        self.positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
+            np.zeros((0, 2), dtype=np.float32)
+        )  # type: ignore
+        self.velocities: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
+            np.zeros((0, 2), dtype=np.float32)
+        )  # type: ignore
+
+    def update(self, delta_time: float, expire_older_than: float):
+        self.accumulated_time += delta_time
+        self.move_projectiles(delta_time)
+        self.expire_projectiles(expire_older_than)
+
+    def add_projectiles(
+        self,
+        new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+        new_velocities: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
+    ):
+        self.start_times = np.concatenate(
+            (
+                self.start_times,
+                np.full((new_positions.shape[0],), self.accumulated_time),
+            )
+        )
+        self.positions = np.concatenate((self.positions, new_positions))
+        self.velocities = np.concatenate((self.velocities, new_velocities))
+
+    def move_projectiles(self, delta_time: float):
+        self.positions += self.velocities * delta_time
+
+    def expire_projectiles(self, older_than: float):
+        alive_mask = self.ages < older_than
+        self.start_times = self.start_times[alive_mask]
+        self.positions = self.positions[alive_mask]
+        self.velocities = self.velocities[alive_mask]
+
+    @property
+    def ages(self) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
+        return self.accumulated_time - self.start_times
+
+    def debug_gui(self):
+        implot.set_next_marker_style(size=5, fill=imgui.ImVec4(0, 0, 255, 1))
+        implot.plot_scatter("projectiles", *ndarray_to_scatter_many(self.positions))
+
+
 class ProjectileLightEffect(LightEffect):
     def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
-        self.accumulated_time = 0.0
-
         self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
             (0,), dtype=bool
         )
-        self.projectile_start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = (
-            np.zeros((0,), dtype=np.float32)
-        )
-        self.projectile_positions: np.ndarray[
-            tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
-        self.projectile_velocities: np.ndarray[
-            tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
+
+        self.projectile_physics = ProjectilePhysics()
 
     def calculate_chain_brightness(
         self,
@@ -92,8 +186,6 @@ class ProjectileLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
-        self.accumulated_time += delta_time
-
         if len(self.exhausted) != len(cattail_context.centers):
             self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
 
@@ -117,39 +209,12 @@ class ProjectileLightEffect(LightEffect):
         )
         projectile_centers = cattail_context.centers[should_shoot]
 
-        self.expire_projectiles()
-        self.move_projectiles(delta_time)
-        self.add_new_projectiles(projectile_centers, projectile_velocities)
-
+        self.projectile_physics.update(delta_time, expire_older_than=5.0)
+        projectile_centers += projectile_velocities * 1.0
+        self.projectile_physics.add_projectiles(
+            projectile_centers, projectile_velocities
+        )
         return self.chain_brightness_from_projectiles(chains)
-
-    def add_new_projectiles(
-        self,
-        new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
-        new_velocities: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
-    ):
-        new_positions += new_velocities * 1.0
-        self.projectile_start_times = np.concatenate(
-            (
-                self.projectile_start_times,
-                np.full((new_positions.shape[0],), self.accumulated_time),
-            )
-        )
-        self.projectile_positions = np.concatenate(
-            (self.projectile_positions, new_positions)
-        )
-        self.projectile_velocities = np.concatenate(
-            (self.projectile_velocities, new_velocities)
-        )
-
-    def move_projectiles(self, delta_time: float):
-        self.projectile_positions += self.projectile_velocities * delta_time
-
-    def expire_projectiles(self):
-        alive_mask = (self.accumulated_time - self.projectile_start_times) < 5.0
-        self.projectile_start_times = self.projectile_start_times[alive_mask]
-        self.projectile_positions = self.projectile_positions[alive_mask]
-        self.projectile_velocities = self.projectile_velocities[alive_mask]
 
     def chain_brightness_from_projectiles(
         self,
@@ -163,7 +228,7 @@ class ProjectileLightEffect(LightEffect):
 
         distances = np.linalg.vector_norm(
             chain_points[:, :, np.newaxis, :]
-            - self.projectile_positions[np.newaxis, np.newaxis, :, :],
+            - self.projectile_physics.positions[np.newaxis, np.newaxis, :, :],
             axis=-1,
         )
         brightness = np.maximum(0.0, 1.0 - distances.min(axis=1) * 1.0).sum(axis=1)
@@ -172,10 +237,7 @@ class ProjectileLightEffect(LightEffect):
         return brightness
 
     def debug_gui(self):
-        implot.set_next_marker_style(size=5, fill=imgui.ImVec4(0, 0, 255, 1))
-        implot.plot_scatter(
-            "projectiles", *ndarray_to_scatter_many(self.projectile_positions)
-        )
+        self.projectile_physics.debug_gui()
 
 
 class PulseLightEffect(LightEffect):
@@ -183,17 +245,11 @@ class PulseLightEffect(LightEffect):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
-        self.accumulated_time = 0.0
-
         self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
             (0,), dtype=bool
         )
-        self.projectile_start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = (
-            np.zeros((0,), dtype=np.float32)
-        )
-        self.projectile_positions: np.ndarray[
-            tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
+
+        self.pulse_physics = PulsePhysics()
 
     def calculate_chain_brightness(
         self,
@@ -201,8 +257,6 @@ class PulseLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
-        self.accumulated_time += delta_time
-
         if len(self.exhausted) != len(cattail_context.centers):
             self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
 
@@ -220,29 +274,14 @@ class PulseLightEffect(LightEffect):
 
         projectile_centers = cattail_context.centers[should_shoot]
 
-        self.expire_projectiles()
-        self.add_new_projectiles(projectile_centers)
+        self.pulse_physics.update(delta_time, expire_older_than=5.0)
+        self.pulse_physics.add_pulses(
+            projectile_centers,
+            np.zeros((projectile_centers.shape[0]), dtype=np.float32),
+            np.full((projectile_centers.shape[0]), 3.0),
+        )
 
         return self.chain_brightness_from_projectiles(chains)
-
-    def add_new_projectiles(
-        self,
-        new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
-    ):
-        self.projectile_start_times = np.concatenate(
-            (
-                self.projectile_start_times,
-                np.full((new_positions.shape[0],), self.accumulated_time),
-            )
-        )
-        self.projectile_positions = np.concatenate(
-            (self.projectile_positions, new_positions)
-        )
-
-    def expire_projectiles(self):
-        alive_mask = (self.accumulated_time - self.projectile_start_times) < 5.0
-        self.projectile_start_times = self.projectile_start_times[alive_mask]
-        self.projectile_positions = self.projectile_positions[alive_mask]
 
     def chain_brightness_from_projectiles(
         self,
@@ -255,8 +294,8 @@ class PulseLightEffect(LightEffect):
 
         distances = distances_from_circles(
             chain_centers,
-            self.projectile_positions,
-            self.pulse_sizes,
+            self.pulse_physics.centers,
+            self.pulse_physics.sizes,
         )
         brightness += np.maximum(
             1.0 - distances * 1.0,
@@ -266,17 +305,8 @@ class PulseLightEffect(LightEffect):
 
         return brightness
 
-    @property
-    def pulse_sizes(self) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
-        return (self.accumulated_time - self.projectile_start_times) * 3.0
-
     def debug_gui(self):
-        for pulse_position, pulse_size in zip(
-            self.projectile_positions, self.pulse_sizes, strict=True
-        ):
-            implot_draw_circle(
-                center=pulse_position, radius=pulse_size.item(), col=0x33FF0000
-            )
+        self.pulse_physics.debug_gui()
 
 
 class PulseLightEffect2(LightEffect):
@@ -284,17 +314,11 @@ class PulseLightEffect2(LightEffect):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
 
-        self.accumulated_time = 0.0
-
         self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
             (0,), dtype=bool
         )
-        self.projectile_start_times: np.ndarray[tuple[int], np.dtype[np.floating]] = (
-            np.zeros((0,), dtype=np.float32)
-        )
-        self.projectile_positions: np.ndarray[
-            tuple[int, Literal[2]], np.dtype[np.floating]
-        ] = np.zeros((0, 2), dtype=np.float32)  # type: ignore
+
+        self.pulse_physics = PulsePhysics()
 
     def calculate_chain_brightness(
         self,
@@ -302,8 +326,6 @@ class PulseLightEffect2(LightEffect):
         chains,
         cattail_context,
     ):
-        self.accumulated_time += delta_time
-
         if len(self.exhausted) != len(cattail_context.centers):
             self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
 
@@ -321,29 +343,14 @@ class PulseLightEffect2(LightEffect):
 
         projectile_centers = cattail_context.centers[should_shoot]
 
-        self.expire_projectiles()
-        self.add_new_projectiles(projectile_centers)
+        self.pulse_physics.update(delta_time, expire_older_than=5.0)
+        self.pulse_physics.add_pulses(
+            projectile_centers,
+            np.full((projectile_centers.shape[0],), 0.7),
+            np.full((projectile_centers.shape[0],), 0.6),
+        )
 
         return self.chain_brightness_from_projectiles(chains)
-
-    def add_new_projectiles(
-        self,
-        new_positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]],
-    ):
-        self.projectile_start_times = np.concatenate(
-            (
-                self.projectile_start_times,
-                np.full((new_positions.shape[0],), self.accumulated_time),
-            )
-        )
-        self.projectile_positions = np.concatenate(
-            (self.projectile_positions, new_positions)
-        )
-
-    def expire_projectiles(self):
-        alive_mask = (self.accumulated_time - self.projectile_start_times) < 5.0
-        self.projectile_start_times = self.projectile_start_times[alive_mask]
-        self.projectile_positions = self.projectile_positions[alive_mask]
 
     def chain_brightness_from_projectiles(
         self,
@@ -356,31 +363,21 @@ class PulseLightEffect2(LightEffect):
 
         distances = distances_from_circles(
             chain_centers,
-            self.projectile_positions,
-            self.pulse_sizes,
+            self.pulse_physics.centers,
+            self.pulse_physics.sizes,
         )
-        projectile_travel_times = self.accumulated_time - self.projectile_start_times
         brightness += np.maximum(
             1.0
             - distances * 2.0
-            - np.maximum((projectile_travel_times - 2.0) * 0.1, 0.0),
+            - np.maximum((self.pulse_physics.ages - 2.0) * 0.1, 0.0),
             0,
         ).sum(axis=1)
         brightness = np.clip(brightness, 0.0, 1.0)
 
         return brightness
 
-    @property
-    def pulse_sizes(self) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
-        return (self.accumulated_time - self.projectile_start_times) * 0.6 + 0.7
-
     def debug_gui(self):
-        for pulse_position, pulse_size in zip(
-            self.projectile_positions, self.pulse_sizes, strict=True
-        ):
-            implot_draw_circle(
-                center=pulse_position, radius=pulse_size.item(), col=0x33FF0000
-            )
+        self.pulse_physics.debug_gui()
 
 
 def distances_from_circle(
