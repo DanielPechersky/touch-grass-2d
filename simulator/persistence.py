@@ -197,5 +197,11 @@ class Persistence:
             (self.project_id, *cattail.pos.tolist(), cattail.group_id),
         )
 
+    def delete_cattail(self, cattail_id: int):
+        self.conn.execute(
+            "DELETE FROM cattails WHERE id = ?",
+            (cattail_id,),
+        )
+
     def close(self):
         self.conn.close()

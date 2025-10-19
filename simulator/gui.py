@@ -218,6 +218,41 @@ class InProjectGui:
             if imgui.is_key_pressed(imgui.Key.escape):
                 self.tool.switched_away()
 
+            if (
+                imgui.is_window_focused(imgui.FocusedFlags_.root_and_child_windows)
+                and imgui.is_key_pressed(imgui.Key.delete | imgui.Key.backspace)
+                and len(self.selection) > 0
+            ):
+                imgui.open_popup("Delete selection")
+            with imgui_ctx.begin_popup_modal("Delete selection") as visible:
+                if visible:
+                    imgui.text("Delete selected items?")
+                    num_chains = 0
+                    num_cattails = 0
+                    selection = self.selection
+                    for x in selection:
+                        match x:
+                            case ChainId():
+                                num_chains += 1
+                            case CattailId():
+                                num_cattails += 1
+                    if num_chains != 0:
+                        imgui.text(f"Delete {num_chains} chain(s)?")
+                    if num_cattails != 0:
+                        imgui.text(f"Delete {num_cattails} cattail(s)?")
+                    if imgui.button("Cancel"):
+                        imgui.close_current_popup()
+                    imgui.same_line()
+                    if imgui.button("Delete"):
+                        for x in selection:
+                            match x:
+                                case ChainId(id=id):
+                                    self.persistence.delete_chain(id)
+                                case CattailId(id=id):
+                                    self.persistence.delete_cattail(id)
+                        self.selection = set()
+                        imgui.close_current_popup()
+
             box_selection_mouse_button = imgui.MouseButton_.left
             if implot.is_plot_hovered() and imgui.is_mouse_clicked(
                 box_selection_mouse_button
