@@ -1,4 +1,5 @@
 from imgui_bundle import hello_imgui, immapp
+from imgui_bundle import imgui_node_editor as ed
 
 from simulator.gui import Gui
 
@@ -11,8 +12,11 @@ runner_params.imgui_window_params.show_menu_bar = True
 runner_params.imgui_window_params.show_menu_app = False
 runner_params.imgui_window_params.show_menu_view = False
 
+node_editor_config = ed.Config()
+node_editor_config.force_window_content_width_to_node_width = True
+
 addons_params = immapp.AddOnsParams()
-addons_params.with_node_editor = True
+addons_params.with_node_editor_config = node_editor_config
 addons_params.with_implot = True
 
 immapp.run(runner_params, addons_params)

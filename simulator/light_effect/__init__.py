@@ -273,10 +273,10 @@ class PulseLightEffect(LightEffect):
         age_falloff_rate=0.1,
     )
 
-    def __init__(self, parameters: Parameters = DEFAULT_PARAMETERS):
+    def __init__(self, params: Parameters = DEFAULT_PARAMETERS):
         self.trigger = AccelerationThresholdTrigger()
         self.pulse_physics = PulsePhysics()
-        self.params = parameters
+        self.params = params
 
     def calculate_chain_brightness(
         self,

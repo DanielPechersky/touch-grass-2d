@@ -404,6 +404,104 @@ class LightEffectNode(Node):
         return {self.output_pin: Brightness(brightness, indices)}
 
 
+class PulseLightEffectNode(Node):
+    def __init__(self, id: int):
+        super().__init__(id)
+
+        self.input_pin = PinId(self.id, "input")
+        self.output_pin = PinId(self.id, "output")
+
+        self.effect = PulseLightEffect()
+        self.debug_gui_enabled = False
+
+    @property
+    def params(self):
+        return self.effect.params
+
+    def pins(self):
+        return {
+            self.input_pin: PinType("input", "scene_context"),
+            self.output_pin: PinType("output", "brightness"),
+        }
+
+    def gui(self, pin_ids) -> None:
+        imgui.text("Pulse Light Effect")
+
+        if imgui.collapsing_header("Parameters"):
+            SLIDER_WIDTH = 150
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.starting_size = imgui.slider_float(
+                f"Starting Size##{self.id}Starting Size",
+                self.params.starting_size,
+                0.0,
+                10.0,
+            )[1]
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.expansion_speed = imgui.slider_float(
+                f"Expansion Speed##{self.id}Expansion Speed",
+                self.params.expansion_speed,
+                -10.0,
+                10.0,
+            )[1]
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.brightness_at_edge = imgui.slider_float(
+                f"Brightness at Edge##{self.id}Brightness at Edge",
+                self.params.brightness_at_edge,
+                0.0,
+                1.0,
+            )[1]
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.brightness_falloff_from_edge = imgui.slider_float(
+                f"Brightness Falloff from Edge##{self.id}Brightness Falloff from Edge",
+                self.params.brightness_falloff_from_edge,
+                0.0,
+                5.0,
+            )[1]
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.age_falloff_start = imgui.slider_float(
+                f"Age Falloff Start##{self.id}Age Falloff Start",
+                self.params.age_falloff_start,
+                0.0,
+                10.0,
+            )[1]
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            self.params.age_falloff_rate = imgui.slider_float(
+                f"Age Falloff Rate##{self.id}Age Falloff Rate",
+                self.params.age_falloff_rate,
+                0.0,
+                1.0,
+            )[1]
+
+        self.debug_gui_enabled = imgui.checkbox(
+            f"Debug GUI##{self.id}Debug Gui",
+            self.debug_gui_enabled,
+        )[1]
+
+        draw_pins(pin_ids, self.pins())
+
+    def plot_gui(self) -> None:
+        if self.debug_gui_enabled:
+            self.effect.debug_gui()
+
+    def run(self, inputs) -> dict[PinId, Any]:
+        context: SceneContext = inputs[self.input_pin]
+        brightness = self.effect.calculate_chain_brightness(
+            imgui.get_io().delta_time,
+            context.chains,
+            CattailContext(
+                centers=context.cattail_centers(),
+                accelerations=context.cattail_accelerations,
+            ),
+        )
+        indices = np.array([c.id for c in context.chains])
+        return {self.output_pin: Brightness(brightness, indices)}
+
+
 class FilterByGroupNode(Node):
     def __init__(self, id: int):
         super().__init__(id)
@@ -501,6 +599,7 @@ def addable_node_types(id: int) -> dict[str, Node]:
         "Light Effect": LightEffectNode(id),
         "Dim": DimNode(id),
         "Filter by Group": FilterByGroupNode(id),
+        "Pulse Light Effect": PulseLightEffectNode(id),
     }
 
 
