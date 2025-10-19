@@ -169,7 +169,7 @@ class ProjectilePhysics:
         implot.plot_scatter("projectiles", *ndarray_to_scatter_many(self.positions))
 
 
-class ProjectileLightEffect(LightEffect):
+class AccelerationThresholdTrigger:
     def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
         self.lower_threshold = lower_threshold
@@ -178,14 +178,10 @@ class ProjectileLightEffect(LightEffect):
             (0,), dtype=bool
         )
 
-        self.projectile_physics = ProjectilePhysics()
-
-    def calculate_chain_brightness(
+    def check_triggers(
         self,
-        delta_time,
-        chains,
-        cattail_context,
-    ):
+        cattail_context: CattailContext,
+    ) -> np.ndarray[tuple[int], np.dtype[np.bool]]:
         if len(self.exhausted) != len(cattail_context.centers):
             self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
 
@@ -196,18 +192,34 @@ class ProjectileLightEffect(LightEffect):
         below_lower_threshold = acceleration_magnitudes < self.lower_threshold
         above_upper_threshold = acceleration_magnitudes > self.upper_threshold
 
-        should_shoot = above_upper_threshold & ~self.exhausted
+        should_trigger = above_upper_threshold & ~self.exhausted
 
         self.exhausted[above_upper_threshold] = True
         self.exhausted[below_lower_threshold] = False
 
-        relevant_accelerations = cattail_context.accelerations[should_shoot]
+        return should_trigger
+
+
+class ProjectileLightEffect(LightEffect):
+    def __init__(self):
+        self.trigger = AccelerationThresholdTrigger()
+        self.projectile_physics = ProjectilePhysics()
+
+    def calculate_chain_brightness(
+        self,
+        delta_time,
+        chains,
+        cattail_context,
+    ):
+        triggered = self.trigger.check_triggers(cattail_context)
+
+        relevant_accelerations = cattail_context.accelerations[triggered]
         projectile_velocities = (
             -relevant_accelerations
             / np.linalg.vector_norm(relevant_accelerations)
             * 1.0
         )
-        projectile_centers = cattail_context.centers[should_shoot]
+        projectile_centers = cattail_context.centers[triggered]
 
         self.projectile_physics.update(delta_time, expire_older_than=5.0)
         projectile_centers += projectile_velocities * 1.0
@@ -241,14 +253,8 @@ class ProjectileLightEffect(LightEffect):
 
 
 class PulseLightEffect(LightEffect):
-    def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
-        self.upper_threshold = upper_threshold
-        self.lower_threshold = lower_threshold
-
-        self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
-            (0,), dtype=bool
-        )
-
+    def __init__(self):
+        self.trigger = AccelerationThresholdTrigger()
         self.pulse_physics = PulsePhysics()
 
     def calculate_chain_brightness(
@@ -257,22 +263,9 @@ class PulseLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
-        if len(self.exhausted) != len(cattail_context.centers):
-            self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
+        triggered = self.trigger.check_triggers(cattail_context)
 
-        acceleration_magnitudes = np.linalg.vector_norm(
-            cattail_context.accelerations, axis=1
-        )
-
-        below_lower_threshold = acceleration_magnitudes < self.lower_threshold
-        above_upper_threshold = acceleration_magnitudes > self.upper_threshold
-
-        should_shoot = above_upper_threshold & ~self.exhausted
-
-        self.exhausted[above_upper_threshold] = True
-        self.exhausted[below_lower_threshold] = False
-
-        projectile_centers = cattail_context.centers[should_shoot]
+        projectile_centers = cattail_context.centers[triggered]
 
         self.pulse_physics.update(delta_time, expire_older_than=5.0)
         self.pulse_physics.add_pulses(
@@ -310,14 +303,8 @@ class PulseLightEffect(LightEffect):
 
 
 class PulseLightEffect2(LightEffect):
-    def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
-        self.upper_threshold = upper_threshold
-        self.lower_threshold = lower_threshold
-
-        self.exhausted: np.ndarray[tuple[int], np.dtype[np.bool]] = np.zeros(
-            (0,), dtype=bool
-        )
-
+    def __init__(self):
+        self.trigger = AccelerationThresholdTrigger()
         self.pulse_physics = PulsePhysics()
 
     def calculate_chain_brightness(
@@ -326,22 +313,9 @@ class PulseLightEffect2(LightEffect):
         chains,
         cattail_context,
     ):
-        if len(self.exhausted) != len(cattail_context.centers):
-            self.exhausted = np.zeros((len(cattail_context.centers),), dtype=bool)
+        triggered = self.trigger.check_triggers(cattail_context)
 
-        acceleration_magnitudes = np.linalg.vector_norm(
-            cattail_context.accelerations, axis=1
-        )
-
-        below_lower_threshold = acceleration_magnitudes < self.lower_threshold
-        above_upper_threshold = acceleration_magnitudes > self.upper_threshold
-
-        should_shoot = above_upper_threshold & ~self.exhausted
-
-        self.exhausted[above_upper_threshold] = True
-        self.exhausted[below_lower_threshold] = False
-
-        projectile_centers = cattail_context.centers[should_shoot]
+        projectile_centers = cattail_context.centers[triggered]
 
         self.pulse_physics.update(delta_time, expire_older_than=5.0)
         self.pulse_physics.add_pulses(
