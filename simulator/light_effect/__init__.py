@@ -255,19 +255,17 @@ class ProjectileLightEffect(LightEffect):
 class PulseLightEffect(LightEffect):
     @dataclass
     class Parameters:
-        starting_size: float
         expansion_speed: float
+        starting_size: float
 
-        brightness_at_edge: float
         brightness_falloff_from_edge: float
 
         age_falloff_start: float
         age_falloff_rate: float
 
     DEFAULT_PARAMETERS = Parameters(
-        starting_size=0.7,
         expansion_speed=0.6,
-        brightness_at_edge=1.0,
+        starting_size=0.7,
         brightness_falloff_from_edge=2.0,
         age_falloff_start=2.0,
         age_falloff_rate=0.1,
@@ -312,7 +310,7 @@ class PulseLightEffect(LightEffect):
             self.pulse_physics.sizes,
         )
         brightness += np.maximum(
-            self.params.brightness_at_edge
+            1.0
             - distances * self.params.brightness_falloff_from_edge
             - np.maximum(
                 (self.pulse_physics.ages - self.params.age_falloff_start)

@@ -354,9 +354,8 @@ class LightEffectNode(Node):
         return {
             "Pulse": PulseLightEffect(
                 PulseLightEffect.Parameters(
-                    starting_size=0.0,
                     expansion_speed=3.0,
-                    brightness_at_edge=1.0,
+                    starting_size=0.0,
                     brightness_falloff_from_edge=1.0,
                     age_falloff_start=0.0,
                     age_falloff_rate=0.0,
@@ -429,13 +428,6 @@ class PulseLightEffectNode(Node):
 
         if imgui.collapsing_header("Parameters"):
             SLIDER_WIDTH = 150
-            imgui.set_next_item_width(SLIDER_WIDTH)
-            self.params.starting_size = imgui.slider_float(
-                f"Starting Size##{self.id}Starting Size",
-                self.params.starting_size,
-                0.0,
-                10.0,
-            )[1]
 
             imgui.set_next_item_width(SLIDER_WIDTH)
             self.params.expansion_speed = imgui.slider_float(
@@ -446,11 +438,11 @@ class PulseLightEffectNode(Node):
             )[1]
 
             imgui.set_next_item_width(SLIDER_WIDTH)
-            self.params.brightness_at_edge = imgui.slider_float(
-                f"Brightness at Edge##{self.id}Brightness at Edge",
-                self.params.brightness_at_edge,
+            self.params.starting_size = imgui.slider_float(
+                f"Starting Size##{self.id}Starting Size",
+                self.params.starting_size,
                 0.0,
-                1.0,
+                10.0,
             )[1]
 
             imgui.set_next_item_width(SLIDER_WIDTH)
