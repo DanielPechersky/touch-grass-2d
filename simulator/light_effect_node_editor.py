@@ -74,9 +74,11 @@ class SceneContext:
 
         return SceneContext(chains, cattails, groups, accelerations)  # type: ignore
 
-    def cattail_centers(self):
+    def cattail_centers(
+        self,
+    ) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]:
         if len(self.cattails) == 0:
-            return np.zeros((0, 2), dtype=np.float32)
+            return np.zeros((0, 2), dtype=np.float32)  # type: ignore
         return np.stack([cattail.pos for cattail in self.cattails])
 
     def chain_ids(self):
