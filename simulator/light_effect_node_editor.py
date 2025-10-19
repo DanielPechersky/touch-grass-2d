@@ -13,7 +13,6 @@ from simulator.light_effect import (
     LightEffect,
     ProjectileLightEffect,
     PulseLightEffect,
-    PulseLightEffect2,
     TestLightEffect,
 )
 from simulator.persistence import Cattail, Chain, Group
@@ -353,8 +352,17 @@ class LightEffectNode(Node):
     @property
     def light_effects(self):
         return {
-            "Pulse": PulseLightEffect(),
-            "Pulse 2": PulseLightEffect2(),
+            "Pulse": PulseLightEffect(
+                PulseLightEffect.Parameters(
+                    starting_size=0.0,
+                    expansion_speed=3.0,
+                    brightness_at_edge=1.0,
+                    brightness_falloff_from_edge=1.0,
+                    age_falloff_start=0.0,
+                    age_falloff_rate=0.0,
+                )
+            ),
+            "Pulse 2": PulseLightEffect(),
             "Projectile": ProjectileLightEffect(),
             "Test": TestLightEffect(),
         }

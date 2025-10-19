@@ -253,9 +253,30 @@ class ProjectileLightEffect(LightEffect):
 
 
 class PulseLightEffect(LightEffect):
-    def __init__(self):
+    @dataclass
+    class Parameters:
+        starting_size: float
+        expansion_speed: float
+
+        brightness_at_edge: float
+        brightness_falloff_from_edge: float
+
+        age_falloff_start: float
+        age_falloff_rate: float
+
+    DEFAULT_PARAMETERS = Parameters(
+        starting_size=0.7,
+        expansion_speed=0.6,
+        brightness_at_edge=1.0,
+        brightness_falloff_from_edge=2.0,
+        age_falloff_start=2.0,
+        age_falloff_rate=0.1,
+    )
+
+    def __init__(self, parameters: Parameters = DEFAULT_PARAMETERS):
         self.trigger = AccelerationThresholdTrigger()
         self.pulse_physics = PulsePhysics()
+        self.params = parameters
 
     def calculate_chain_brightness(
         self,
@@ -270,8 +291,8 @@ class PulseLightEffect(LightEffect):
         self.pulse_physics.update(delta_time, expire_older_than=5.0)
         self.pulse_physics.add_pulses(
             projectile_centers,
-            np.zeros((projectile_centers.shape[0]), dtype=np.float32),
-            np.full((projectile_centers.shape[0]), 3.0),
+            np.full((projectile_centers.shape[0],), self.params.starting_size),
+            np.full((projectile_centers.shape[0],), self.params.expansion_speed),
         )
 
         return self.chain_brightness_from_projectiles(chains)
@@ -291,60 +312,14 @@ class PulseLightEffect(LightEffect):
             self.pulse_physics.sizes,
         )
         brightness += np.maximum(
-            1.0 - distances * 1.0,
-            0,
-        ).sum(axis=1)
-        brightness = np.clip(brightness, 0.0, 1.0)
-
-        return brightness
-
-    def debug_gui(self):
-        self.pulse_physics.debug_gui()
-
-
-class PulseLightEffect2(LightEffect):
-    def __init__(self):
-        self.trigger = AccelerationThresholdTrigger()
-        self.pulse_physics = PulsePhysics()
-
-    def calculate_chain_brightness(
-        self,
-        delta_time,
-        chains,
-        cattail_context,
-    ):
-        triggered = self.trigger.check_triggers(cattail_context)
-
-        projectile_centers = cattail_context.centers[triggered]
-
-        self.pulse_physics.update(delta_time, expire_older_than=5.0)
-        self.pulse_physics.add_pulses(
-            projectile_centers,
-            np.full((projectile_centers.shape[0],), 0.7),
-            np.full((projectile_centers.shape[0],), 0.6),
-        )
-
-        return self.chain_brightness_from_projectiles(chains)
-
-    def chain_brightness_from_projectiles(
-        self,
-        chains: list[Chain],
-    ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
-        brightness = np.zeros((len(chains),), dtype=np.float32)
-
-        chain_points = np.stack([chain.points for chain in chains], dtype=np.float32)
-        chain_centers = np.mean(chain_points, axis=1)
-
-        distances = distances_from_circles(
-            chain_centers,
-            self.pulse_physics.centers,
-            self.pulse_physics.sizes,
-        )
-        brightness += np.maximum(
-            1.0
-            - distances * 2.0
-            - np.maximum((self.pulse_physics.ages - 2.0) * 0.1, 0.0),
-            0,
+            self.params.brightness_at_edge
+            - distances * self.params.brightness_falloff_from_edge
+            - np.maximum(
+                (self.pulse_physics.ages - self.params.age_falloff_start)
+                * self.params.age_falloff_rate,
+                0.0,
+            ),
+            0.0,
         ).sum(axis=1)
         brightness = np.clip(brightness, 0.0, 1.0)
 
