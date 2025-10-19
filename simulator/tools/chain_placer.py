@@ -28,7 +28,9 @@ class ChainTool(Tool):
         self.reset_selected_tool()
 
     def reset_selected_tool(self):
-        self.selected_tool: Update | ChainPlacer = Update(self.persistence)
+        self.selected_tool: ChainPlacer = ChainPlacer(
+            self.persistence, self.chain_size, self.spacing
+        )
 
     def main_gui(self):
         display_cattails(self.persistence.get_cattails())
@@ -40,10 +42,8 @@ class ChainTool(Tool):
             "Chain Subtools",
             child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
         ):
-            if imgui.radio_button("Move Chain", isinstance(self.selected_tool, Update)):
-                self.selected_tool = Update(self.persistence)
             if imgui.radio_button(
-                "Place Chain", isinstance(self.selected_tool, ChainPlacer)
+                "Point by point", isinstance(self.selected_tool, ChainPlacer)
             ):
                 self.selected_tool = ChainPlacer(
                     self.persistence, self.chain_size, self.spacing
@@ -51,58 +51,6 @@ class ChainTool(Tool):
 
     def switched_away(self):
         self.reset_selected_tool()
-
-
-class Update(Tool):
-    def __init__(self, persistence: Persistence):
-        self.persistence = persistence
-
-        self.selected_chain_ids: list[int] = []
-
-    @property
-    def selected_chains(self) -> list[Chain[int]]:
-        return [
-            c for c in self.persistence.get_chains() if c.id in self.selected_chain_ids
-        ]
-
-    def main_gui(self):
-        chains = self.persistence.get_chains()
-
-        for chain in chains:
-            center = chain.points.mean(axis=0)
-            coords_changed, x, y, clicked, hovered, held = implot.drag_point(
-                chain.id,
-                *center.tolist(),
-                col=imgui.ImVec4(0.0, 0.0, 1.0, 1.0),
-                size=6,
-                out_clicked=True,
-                out_hovered=True,
-                held=True,
-            )
-
-            new_chain_points = chain.points - center + [x, y]
-
-            if (clicked or held) and (
-                imgui.is_key_down(imgui.Key.delete)
-                or imgui.is_key_down(imgui.Key.backspace)
-            ):
-                self.persistence.delete_chain(chain.id)
-            if coords_changed:
-                self.persistence.update_chain(
-                    Chain(
-                        id=chain.id,
-                        points=new_chain_points,
-                    )
-                )
-
-            plot_chain(
-                f"chain_{chain.id}",
-                new_chain_points,
-                color=imgui.ImVec4(1.0, 1.0, 0.0, 1.0),
-            )
-
-    def switched_away(self):
-        self.selected_chain_ids = []
 
 
 class ChainPlacer(Tool):
