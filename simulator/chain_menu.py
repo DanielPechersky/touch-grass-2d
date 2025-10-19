@@ -18,7 +18,9 @@ class ChainMenu:
         self.chains = persistence.get_chains()
         self.cattails = persistence.get_cattails()
         self.groups = persistence.get_groups()
-        self.grouped_children = group_children(self.groups, self.chains, self.cattails)
+        self.grouped_children = group_children(
+            self.groups, self.chains, self.cattails, is_root=True
+        )
         self.flattened_children = list(flatten_tree(self.grouped_children))
 
         self.groups_to_add = []

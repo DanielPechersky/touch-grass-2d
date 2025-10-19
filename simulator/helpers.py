@@ -105,9 +105,14 @@ type ChildrenTree = dict[int | None, list[GroupChild]]
 
 
 def group_children(
-    groups: list[Group[int]], chains: list[Chain[int]], cattails: list[Cattail[int]]
+    groups: list[Group[int]],
+    chains: list[Chain[int]],
+    cattails: list[Cattail[int]],
+    is_root=False,
 ) -> ChildrenTree:
     children: ChildrenTree = {}
+    if is_root:
+        children[None] = []
 
     for group in groups:
         children.setdefault(group.parent_group_id, []).append(group)
