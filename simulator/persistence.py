@@ -52,6 +52,23 @@ class Cattail[Id]:
         return f"t_{self.id}"
 
 
+@dataclass
+class EffectNode[Id]:
+    id: Id
+    type: str
+    params: str
+    position: np.ndarray[tuple[Literal[2]], np.dtype[np.floating]]
+
+
+@dataclass
+class EffectNodeLink[Id]:
+    id: Id
+    start_node_id: int
+    start_pin_name: str
+    end_node_id: int
+    end_pin_name: str
+
+
 class Persistence:
     def __init__(self, db: str):
         self.db = db
@@ -201,6 +218,100 @@ class Persistence:
         self.conn.execute(
             "DELETE FROM cattails WHERE id = ?",
             (cattail_id,),
+        )
+
+    def get_effect_node(self, effect_node_id: int) -> EffectNode[int] | None:
+        row = self.conn.execute(
+            "SELECT id, type, params, position FROM effect_nodes WHERE id = ?",
+            (effect_node_id,),
+        ).fetchone()
+        if row is not None:
+            return EffectNode(
+                id=row[0],
+                type=row[1],
+                params=row[2],
+                position=np.array(json.loads(row[3]), dtype=np.float32),
+            )
+
+    def get_effect_nodes(self) -> list[EffectNode[int]]:
+        rows = self.conn.execute(
+            "SELECT id, type, params, position FROM effect_nodes WHERE project_id = ? ORDER BY id",
+            (self.project_id,),
+        )
+        return [
+            EffectNode(
+                id=row[0],
+                type=row[1],
+                params=row[2],
+                position=np.array(json.loads(row[3]), dtype=np.float32),
+            )
+            for row in rows
+        ]
+
+    def append_effect_node(self, effect_node: EffectNode[None]) -> int:
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO effect_nodes(project_id, type, params, position) VALUES(?, ?, ?, ?)",
+            (
+                self.project_id,
+                effect_node.type,
+                effect_node.params,
+                json.dumps(effect_node.position.tolist()),
+            ),
+        )
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def update_effect_node(self, effect_node: EffectNode[int]):
+        self.conn.execute(
+            "UPDATE effect_nodes SET type = ?, params = ?, position = ? WHERE id = ?",
+            (
+                effect_node.type,
+                effect_node.params,
+                json.dumps(effect_node.position.tolist()),
+                effect_node.id,
+            ),
+        )
+
+    def delete_effect_node(self, effect_node_id: int):
+        self.conn.execute(
+            "DELETE FROM effect_nodes WHERE id = ?",
+            (effect_node_id,),
+        )
+
+    def get_effect_node_links(self) -> list[EffectNodeLink[int]]:
+        rows = self.conn.execute(
+            "SELECT id, start_node_id, start_pin_name, end_node_id, end_pin_name FROM effect_node_links ORDER BY id",
+        )
+        return [
+            EffectNodeLink(
+                id=row[0],
+                start_node_id=row[1],
+                start_pin_name=row[2],
+                end_node_id=row[3],
+                end_pin_name=row[4],
+            )
+            for row in rows
+        ]
+
+    def append_effect_node_link(self, link: EffectNodeLink[None]) -> int:
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO effect_node_links(start_node_id, start_pin_name, end_node_id, end_pin_name) VALUES(?, ?, ?, ?)",
+            (
+                link.start_node_id,
+                link.start_pin_name,
+                link.end_node_id,
+                link.end_pin_name,
+            ),
+        )
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def delete_effect_node_link(self, link_id: int):
+        self.conn.execute(
+            "DELETE FROM effect_node_links WHERE id = ?",
+            (link_id,),
         )
 
     def close(self):

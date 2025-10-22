@@ -89,7 +89,7 @@ class InProjectGui:
         assert scale is not None
         self.scale: float = scale
 
-        self.simulator = Simulator()
+        self.simulator = Simulator(persistence)
         self.update_simulator()
         self.move_tool = MoveTool(persistence)
         self.chain_tool = ChainTool(persistence, chain_size, 2.0 / chain_size)

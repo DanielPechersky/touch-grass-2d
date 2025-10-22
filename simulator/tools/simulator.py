@@ -9,13 +9,14 @@ from simulator.helpers import (
     point_to_ndarray,
 )
 from simulator.light_effect_node_editor import Editor, SceneContext
-from simulator.persistence import Cattail, Chain, Group
+from simulator.persistence import Cattail, Chain, Group, Persistence
 from simulator.tools import Tool
 
 
 class Simulator(Tool):
     def __init__(
         self,
+        persistence: Persistence,
     ):
         self.set_chains([])
         self.set_cattails([])
@@ -23,7 +24,7 @@ class Simulator(Tool):
 
         self.light_effect_debug_gui = False
 
-        self.editor = Editor()
+        self.editor = Editor(persistence)
 
     def set_chains(self, chains: list[Chain[int]]):
         self.chains: list[Chain[int]] = chains

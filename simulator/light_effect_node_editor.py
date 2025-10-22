@@ -1,6 +1,6 @@
 import contextlib
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Mapping, Protocol, Self
 
 import numpy as np
@@ -8,6 +8,7 @@ from imgui_bundle import imgui, imgui_ctx, implot
 from imgui_bundle import imgui_node_editor as ed
 from imgui_bundle import imgui_node_editor_ctx as ed_ctx
 from imgui_bundle.immapp import icons_fontawesome_6 as fa6
+from pydantic import BaseModel, ValidationError
 
 from simulator.helpers import (
     ChildrenTree,
@@ -24,7 +25,14 @@ from simulator.light_effect import (
     PulseLightEffect,
     TestLightEffect,
 )
-from simulator.persistence import Cattail, Chain, Group
+from simulator.persistence import (
+    Cattail,
+    Chain,
+    EffectNode,
+    EffectNodeLink,
+    Group,
+    Persistence,
+)
 
 
 class SceneContext:
@@ -167,13 +175,17 @@ INVALID_INPUT_COLOR = imgui.ImVec4(1.0, 0.5, 0.0, 1.0)
 INVALID_INPUT_SYMBOL = fa6.ICON_FA_TRIANGLE_EXCLAMATION
 
 
-class Node:
-    def __init__(self, id: int):
-        self.id = id
+class EmptyParams(BaseModel):
+    pass
 
-    @classmethod
-    def type(cls) -> str:
-        return cls.__name__
+
+class Node[P: BaseModel](Protocol):
+    id: int
+    params: P
+    Params: type[P]
+
+    def __init__(self, id: int):
+        raise NotImplementedError
 
     @property
     def deletable(self) -> bool:
@@ -194,16 +206,15 @@ class Node:
         raise NotImplementedError
 
 
-class SourceNode(Node):
+class SourceNode(Node[EmptyParams]):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
         self.context: SceneContext | None = None
 
         self.output_pin = PinId(self.id, "output")
-
-    @property
-    def deletable(self) -> bool:
-        return False
 
     def set_context(self, context: SceneContext):
         self.context = context
@@ -244,15 +255,14 @@ def combine_brightnesses(*brightnesses: Brightness) -> Brightness:
 
 
 class DestinationNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
         self.brightness: Brightness | None = None
 
         self.input_pin = PinId(self.id, "input")
-
-    @property
-    def deletable(self) -> bool:
-        return False
 
     def pins(self):
         return {self.input_pin: PinType("input", "brightness")}
@@ -267,8 +277,11 @@ class DestinationNode(Node):
 
 
 class AlwaysBrightNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
@@ -293,8 +306,11 @@ class AlwaysBrightNode(Node):
 
 
 class InvertNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
@@ -316,8 +332,11 @@ class InvertNode(Node):
 
 
 class DimNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
@@ -347,8 +366,11 @@ class DimNode(Node):
 
 
 class LightEffectNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
@@ -366,16 +388,6 @@ class LightEffectNode(Node):
     @property
     def light_effects(self):
         return {
-            "Pulse": PulseLightEffect(
-                PulseLightEffect.Parameters(
-                    expansion_speed=3.0,
-                    starting_size=0.0,
-                    brightness_falloff_from_edge=1.0,
-                    age_falloff_start=0.0,
-                    age_falloff_rate=0.0,
-                )
-            ),
-            "Pulse 2": PulseLightEffect(),
             "Projectile": ProjectileLightEffect(),
             "Test": TestLightEffect(),
         }
@@ -417,19 +429,28 @@ class LightEffectNode(Node):
         return {self.output_pin: Brightness(brightness, indices)}
 
 
-class PulseLightEffectNode(Node):
+class PulseLightEffectNodeParams(BaseModel):
+    expansion_speed: float = 3.0
+    starting_size: float = 0.0
+
+    brightness_falloff_from_edge: float = 1.0
+
+    age_falloff_start: float = 0.0
+    age_falloff_rate: float = 0.0
+
+
+class PulseLightEffectNode(Node[PulseLightEffectNodeParams]):
+    Params = PulseLightEffectNodeParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
 
         self.effect = PulseLightEffect()
         self.debug_gui_enabled = False
-
-    @property
-    def params(self):
-        return self.effect.params
 
     def pins(self):
         return {
@@ -495,6 +516,7 @@ class PulseLightEffectNode(Node):
             self.effect.debug_gui()
 
     def run(self, inputs) -> dict[PinId, Any]:
+        self.effect.params = PulseLightEffect.Parameters(**self.params.model_dump())
         context: SceneContext = inputs[self.input_pin]
         brightness = self.effect.calculate_chain_brightness(
             imgui.get_io().delta_time,
@@ -508,38 +530,83 @@ class PulseLightEffectNode(Node):
         return {self.output_pin: Brightness(brightness, indices)}
 
 
+@dataclass
+class Points:
+    array: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = field(
+        default_factory=lambda: np.zeros((0, 2), dtype=np.float32)
+    )  # type: ignore
+
+    def __eq__(self, other):
+        if not isinstance(other, Points):
+            return False
+        return np.array_equal(self.array, other.array)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        from pydantic_core import core_schema
+
+        def _deserialize(v):
+            if isinstance(v, np.ndarray):
+                return cls(v)
+            return cls(np.array(v, dtype=np.float32, ndmin=2).reshape(-1, 2))  # type: ignore
+
+        def _serialize(v):
+            return v.array.tolist()
+
+        return core_schema.no_info_plain_validator_function(
+            _deserialize,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                _serialize,
+                return_schema=core_schema.list_schema(
+                    core_schema.list_schema(core_schema.float_schema())
+                ),
+            ),
+        )
+
+
+class PathLightEffectNodeParams(BaseModel):
+    path: Points = Points()
+    projectile_speed: float = 1.0
+    num_bounces: int = 0
+    brightness_falloff: float = 1.0
+
+
 class PathLightEffectNode(Node):
+    Params = PathLightEffectNodeParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
-
-        # Start with no path - user must add points
-        self.path_points: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
-            np.zeros((0, 2), dtype=np.float32)
-        )  # type: ignore
-        self.projectile_speed = 1.0
-        self.num_bounces = 0
-        self.brightness_falloff = 1.0
 
         self.effect: PathLightEffect | None = None
         self.debug_gui_enabled = False
         self.editing_path = False
 
+    @property
+    def path(self) -> np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]:
+        return self.params.path.array
+
+    @path.setter
+    def path(self, value: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]):
+        self.params.path = Points(value)
+
     def _rebuild_effect(self):
         """Rebuild the light effect with current parameters."""
-        if len(self.path_points) < 2:
+        if len(self.path) < 2:
             self.effect = None
             return
 
-        params = PathLightEffect.Parameters(
-            path=self.path_points,
-            projectile_speed=self.projectile_speed,
-            num_bounces=self.num_bounces,
-            brightness_falloff=self.brightness_falloff,
+        self.effect = PathLightEffect(
+            PathLightEffect.Parameters(
+                path=self.path,
+                projectile_speed=self.params.projectile_speed,
+                num_bounces=self.params.num_bounces,
+                brightness_falloff=self.params.brightness_falloff,
+            )
         )
-        self.effect = PathLightEffect(params)
 
     def pins(self):
         return {
@@ -564,7 +631,7 @@ class PathLightEffectNode(Node):
                 self.editing_path = not self.editing_path
 
         # Show status indicator
-        num_points = len(self.path_points)
+        num_points = len(self.path)
         if num_points < 2:
             imgui.text_colored(
                 INVALID_INPUT_COLOR,
@@ -579,34 +646,34 @@ class PathLightEffectNode(Node):
             imgui.set_next_item_width(SLIDER_WIDTH)
             changed, new_speed = imgui.slider_float(
                 f"Projectile Speed##{self.id}ProjectileSpeed",
-                self.projectile_speed,
+                self.params.projectile_speed,
                 0.0,
                 5.0,
             )
             if changed:
-                self.projectile_speed = new_speed
+                self.params.projectile_speed = new_speed
                 self._rebuild_effect()
 
             imgui.set_next_item_width(SLIDER_WIDTH)
             changed, new_bounces = imgui.slider_int(
                 f"Num Bounces##{self.id}NumBounces",
-                self.num_bounces,
+                self.params.num_bounces,
                 0,
                 10,
             )
             if changed:
-                self.num_bounces = new_bounces
+                self.params.num_bounces = new_bounces
                 self._rebuild_effect()
 
             imgui.set_next_item_width(SLIDER_WIDTH)
             changed, new_falloff = imgui.slider_float(
                 f"Brightness Falloff##{self.id}BrightnessFalloff",
-                self.brightness_falloff,
+                self.params.brightness_falloff,
                 0.0,
                 5.0,
             )
             if changed:
-                self.brightness_falloff = new_falloff
+                self.params.brightness_falloff = new_falloff
                 self._rebuild_effect()
 
         self.debug_gui_enabled = imgui.checkbox(
@@ -626,13 +693,11 @@ class PathLightEffectNode(Node):
         """Interactive path editor within the plot."""
 
         # Draw existing path as a line
-        if len(self.path_points) >= 2:
-            implot.plot_line(
-                f"path_{self.id}", *ndarray_to_scatter_many(self.path_points)
-            )
+        if len(self.path) >= 2:
+            implot.plot_line(f"path_{self.id}", *ndarray_to_scatter_many(self.path))
 
         # Draw path points as editable markers
-        if len(self.path_points) > 0:
+        if len(self.path) > 0:
             # Highlight differently when editing
             marker_color = (
                 imgui.ImVec4(0.0, 1.0, 0.0, 1.0)
@@ -640,9 +705,7 @@ class PathLightEffectNode(Node):
                 else imgui.ImVec4(1.0, 0.5, 0.0, 1.0)
             )
             implot.set_next_marker_style(size=10, fill=marker_color)
-            implot.plot_scatter(
-                f"path_points_{self.id}", *ndarray_to_scatter_many(self.path_points)
-            )
+            implot.plot_scatter(f"path_{self.id}", *ndarray_to_scatter_many(self.path))
 
         # Only handle user interaction if editing is enabled
         if self.editing_path:
@@ -657,23 +720,19 @@ class PathLightEffectNode(Node):
 
                 # Left click to add point
                 if imgui.is_mouse_clicked(imgui.MouseButton_.left):
-                    self.path_points = np.concatenate(
-                        [self.path_points, mouse_pos[np.newaxis, :]]
-                    )
+                    self.path = np.concatenate([self.path, mouse_pos[np.newaxis, :]])
                     self._rebuild_effect()
 
                 # Right click to remove nearest point
                 elif imgui.is_mouse_clicked(imgui.MouseButton_.right):
-                    if len(self.path_points) > 0:
+                    if len(self.path) > 0:
                         # Find nearest point to mouse
-                        distances = np.linalg.norm(self.path_points - mouse_pos, axis=1)
+                        distances = np.linalg.norm(self.path - mouse_pos, axis=1)
                         nearest_idx = int(np.argmin(distances))
 
                         # Remove if within reasonable distance (e.g., 0.5 units)
                         if distances[nearest_idx] < 0.5:
-                            self.path_points = np.delete(
-                                self.path_points, nearest_idx, axis=0
-                            )
+                            self.path = np.delete(self.path, nearest_idx, axis=0)
                             self._rebuild_effect()
 
                 # Show instructions as tooltip when editing and hovering
@@ -703,8 +762,11 @@ class PathLightEffectNode(Node):
 
 
 class FilterByGroupNode(Node):
+    Params = EmptyParams
+
     def __init__(self, id: int):
-        super().__init__(id)
+        self.id = id
+        self.params = self.Params()
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
@@ -797,34 +859,99 @@ class EditorIdGenerator[K, V: EditorIdProtocol]:
         return self.ids_reverse[v.id()]
 
 
-def addable_node_types(id: int) -> dict[str, Node]:
+def node_types() -> dict[str, type[Node]]:
     return {
-        "Always Bright": AlwaysBrightNode(id),
-        "Invert": InvertNode(id),
-        "Light Effect": LightEffectNode(id),
-        "Dim": DimNode(id),
-        "Filter by Group": FilterByGroupNode(id),
-        "Pulse Light Effect": PulseLightEffectNode(id),
-        "Path Light Effect": PathLightEffectNode(id),
+        "Source": SourceNode,
+        "Destination": DestinationNode,
+        "AlwaysBright": AlwaysBrightNode,
+        "Invert": InvertNode,
+        "LightEffect": LightEffectNode,
+        "Dim": DimNode,
+        "FilterByGroup": FilterByGroupNode,
+        "PulseLightEffect": PulseLightEffectNode,
+        "PathLightEffect": PathLightEffectNode,
+    }
+
+
+def node_display_names() -> dict[str, str]:
+    return {
+        "Source": "Source",
+        "Destination": "Destination",
+        "AlwaysBright": "Always Bright",
+        "Invert": "Invert",
+        "LightEffect": "Light Effect",
+        "Dim": "Dim",
+        "FilterByGroup": "Filter by Group",
+        "PulseLightEffect": "Pulse Light Effect",
+        "PathLightEffect": "Path Light Effect",
     }
 
 
 class Editor:
-    def __init__(self):
-        self.source_node = SourceNode(id=1)
-        self.destination_node = DestinationNode(id=2)
-        nodes = [
-            self.source_node,
-            self.destination_node,
-        ]
-        self.nodes: dict[int, Node] = {node.id: node for node in nodes}
-        self.links: list[Link] = []
-        self.link_ids = EditorIdGenerator[Link, ed.LinkId](
-            start_editor_id=10_000, wrapper=ed.LinkId
+    def __init__(self, persistence: Persistence):
+        self.persistence = persistence
+        self.nodes: dict[int, Node] = {}
+        self.node_ids = EditorIdGenerator[int, ed.NodeId](
+            start_editor_id=1, wrapper=ed.NodeId
+        )
+        self.link_ids = EditorIdGenerator[int, ed.LinkId](
+            start_editor_id=10_000_000, wrapper=ed.LinkId
         )
         self.pin_ids = EditorIdGenerator[PinId, ed.PinId](
-            start_editor_id=20_000, wrapper=ed.PinId
+            start_editor_id=20_000_000, wrapper=ed.PinId
         )
+
+        self.frame_count = 0
+
+        self.context_window_opened_at: np.ndarray[
+            tuple[Literal[2]], np.dtype[np.floating]
+        ] = np.array([0.0, 0.0])
+
+    def _load_nodes(self):
+        for effect_node in self.persistence.get_effect_nodes():
+            try:
+                node_type = node_types()[effect_node.type]
+            except KeyError:
+                print(f"Invalid node type {effect_node.type}")
+                print(f"Deleting node {effect_node.id}")
+                self.persistence.delete_effect_node(effect_node.id)
+                continue
+
+            try:
+                params = node_type.Params.model_validate_json(effect_node.params)  # type: ignore
+            except ValidationError as e:
+                print(f"Error loading node params for {effect_node.id}: {e}")
+                print(f"Resetting params for node {effect_node.id}")
+                params = node_type.Params()  # type: ignore
+                continue
+
+            if (existing_node := self.nodes.get(effect_node.id)) is not None:
+                existing_node.params = params
+            else:
+                node = node_type(effect_node.id)
+                node.params = params
+                self.nodes[node.id] = node
+                ed.set_node_position(
+                    self.node_ids.get(node.id),
+                    imgui.ImVec2(*effect_node.position),
+                )
+
+    def links(self) -> dict[int, Link]:
+        links = {}
+        pins = self.pins()
+        for effect_link in self.persistence.get_effect_node_links():
+            link = Link(
+                PinId(effect_link.start_node_id, effect_link.start_pin_name),
+                PinId(effect_link.end_node_id, effect_link.end_pin_name),
+            )
+            if not self._valid_link(link, links, pins):
+                print(f"Invalid link {effect_link.id}, deleting")
+                self.persistence.delete_effect_node_link(effect_link.id)
+                continue
+
+            links[effect_link.id] = link
+
+        return links
 
     def pins(self) -> dict[PinId, PinType]:
         pins: dict[PinId, PinType] = {}
@@ -835,21 +962,34 @@ class Editor:
     def execute(
         self, context: SceneContext
     ) -> np.ndarray[tuple[int], np.dtype[np.floating]] | None:
-        self.source_node.set_context(context)
-        self.destination_node.brightness = None
+        self._load_nodes()
+        links = self.links()
+
+        source_nodes = [
+            node for node in self.nodes.values() if isinstance(node, SourceNode)
+        ]
+        destination_nodes = [
+            node for node in self.nodes.values() if isinstance(node, DestinationNode)
+        ]
+
+        for source_node in source_nodes:
+            source_node.set_context(context)
+
+        for dest_node in destination_nodes:
+            dest_node.brightness = None
 
         input_values: dict[PinId, Brightness | SceneContext] = {}
 
         fulfilled_links: set[Link] = set[Link]()
         links_by_start_node: dict[int, list[Link]] = {}
-        for link in self.links:
+        for link in links.values():
             links_by_start_node.setdefault(link.start.node_id, []).append(link)
 
         links_by_end_node: dict[int, list[Link]] = {}
-        for link in self.links:
+        for link in links.values():
             links_by_end_node.setdefault(link.end.node_id, []).append(link)
 
-        ready_nodes: set[Node] = {self.source_node}
+        ready_nodes: set[Node] = set(source_nodes)
         while ready_nodes:
             node = ready_nodes.pop()
 
@@ -892,23 +1032,37 @@ class Editor:
                 if all_links_to_target_fulfilled:
                     ready_nodes.add(target_node)
 
-        brightness: Brightness | None = self.destination_node.brightness
-        if brightness is None:
+        # Combine brightness from all destination nodes
+        destination_brightnesses = [
+            dest_node.brightness
+            for dest_node in destination_nodes
+            if dest_node.brightness is not None
+        ]
+
+        if not destination_brightnesses:
             return None
+
+        combined_brightness = combine_brightnesses(*destination_brightnesses)
         original_ids = context.chain_ids()
-        final_brightness = np.zeros(original_ids.shape, dtype=np.float32)
-        indices = np.searchsorted(original_ids, brightness.chain_ids)
-        final_brightness[indices] = brightness.values
+        final_brightness: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            original_ids.shape, dtype=np.float32
+        )  # type: ignore
+        indices = np.searchsorted(original_ids, combined_brightness.chain_ids)
+        final_brightness[indices] = combined_brightness.values
         return final_brightness
 
     def gui(self):
         try:
+            self._load_nodes()
+            links = self.links()
             pins = self.pins()
 
             with ed_ctx.begin("Effect Nodes Editor"):
                 for node in self.nodes.values():
-                    with ed_ctx.begin_node(ed.NodeId(node.id)):
+                    with ed_ctx.begin_node(self.node_ids.get(node.id)):
+                        prev_params = node.params.model_copy(deep=True)
                         node.gui(lambda pin_id: self.pin_ids.get(pin_id))
+                        self._persist_params_if_changed(node, prev_params)
 
                 if imgui.is_key_pressed(imgui.Key.delete | imgui.Key.backspace):
                     for link in ed.get_selected_links():
@@ -918,15 +1072,26 @@ class Editor:
 
                 ed.suspend()
                 if ed.show_background_context_menu():
+                    self.context_window_opened_at = np.array(
+                        ed.screen_to_canvas(imgui.get_mouse_pos())
+                    )
                     imgui.open_popup("Node Editor Context Menu")
 
                 with imgui_ctx.begin_popup("Node Editor Context Menu") as visible:
                     if visible:
                         with imgui_ctx.begin_menu("New Node"):
-                            nodes = addable_node_types(id=max(self.nodes.keys()) + 1)
-                            for node_name, node in nodes.items():
+                            nodes = node_display_names()
+                            for node_type, node_name in nodes.items():
                                 if imgui.menu_item(node_name, "", False)[0]:
-                                    self.nodes[node.id] = node
+                                    # Save to database
+                                    self.persistence.append_effect_node(
+                                        EffectNode(
+                                            id=None,
+                                            type=node_type,
+                                            params=r"{}",
+                                            position=self.context_window_opened_at,
+                                        )
+                                    )
 
                 ed.resume()
 
@@ -936,34 +1101,20 @@ class Editor:
                         if ed.query_new_link(start, end):
                             start = self.pin_ids.get_key(start)
                             end = self.pin_ids.get_key(end)
-                            start_type = pins[start]
-                            end_type = pins[end]
+                            if pins[start].type == "input":
+                                start, end = end, start
+                            link = Link(start, end)
 
-                            matches_input_output = {start_type.type, end_type.type} == {
-                                "input",
-                                "output",
-                            }
-
-                            matches_data = start_type.data == end_type.data
-
-                            no_existing_link = all(
-                                not (
-                                    (link.start == start and link.end == end)
-                                    or (link.start == end and link.end == start)
-                                )
-                                for link in self.links
-                            )
-
-                            if (
-                                matches_input_output
-                                and matches_data
-                                and no_existing_link
-                            ):
+                            if self._valid_link(link, links, pins):
                                 if ed.accept_new_item(imgui.ImVec4(0, 1, 0, 1)):
-                                    self.links.append(
-                                        Link(
-                                            start=start,
-                                            end=end,
+                                    # Save to database
+                                    self.persistence.append_effect_node_link(
+                                        EffectNodeLink(
+                                            id=None,
+                                            start_node_id=start.node_id,
+                                            start_pin_name=start.name,
+                                            end_node_id=end.node_id,
+                                            end_pin_name=end.name,
                                         )
                                     )
                             else:
@@ -973,34 +1124,42 @@ class Editor:
                     if begin_delete:
                         node_id = ed.NodeId()
                         while ed.query_deleted_node(node_id):
-                            node = self.nodes[node_id.id()]
+                            node = self.nodes[self.node_ids.get_key(node_id)]
                             if node.deletable:
                                 if ed.accept_deleted_item():
-                                    del self.nodes[node_id.id()]
-                                    for link in self.links:
-                                        self.links = [
-                                            link
-                                            for link in self.links
-                                            if link.start.node_id != node.id
-                                            and link.end.node_id != node.id
-                                        ]
+                                    # Delete node from database
+                                    self.persistence.delete_effect_node(node.id)
+                                    # Delete from memory
+                                    del self.nodes[node.id]
                             else:
                                 ed.reject_deleted_item()
 
                         link = ed.LinkId()
                         while ed.query_deleted_link(link):
-                            link_id = self.link_ids.get_key(link)
+                            db_link_id = self.link_ids.get_key(link)
                             if ed.accept_deleted_item():
-                                self.links = [
-                                    link for link in self.links if link != link_id
-                                ]
+                                self.persistence.delete_effect_node_link(db_link_id)
 
-                for link in self.links:
+                for link_id, link in links.items():
                     ed.link(
-                        self.link_ids.get(link),
+                        self.link_ids.get(link_id),
                         self.pin_ids.get(link.start),
                         self.pin_ids.get(link.end),
                     )
+
+                if self.frame_count == 2:
+                    ed.navigate_to_content(0.0)
+                self.frame_count += 1
+
+            for node in self.nodes.values():
+                effect_node = self.persistence.get_effect_node(node.id)
+                if effect_node is None:
+                    continue
+                current_pos = ed.get_node_position(self.node_ids.get(node.id))
+                current_pos = np.array([current_pos.x, current_pos.y])
+                if not np.array_equal(effect_node.position, current_pos):
+                    effect_node.position = current_pos
+                    self.persistence.update_effect_node(effect_node)
 
         except Exception:
             print("Error in node editor")
@@ -1008,4 +1167,43 @@ class Editor:
 
     def plot_gui(self):
         for node in self.nodes.values():
+            prev_params = node.params.model_copy(deep=True)
             node.plot_gui()
+            self._persist_params_if_changed(node, prev_params)
+
+    def _valid_link(
+        self, link: Link, links: dict[int, Link], pins: dict[PinId, PinType]
+    ):
+        if (start_type := pins.get(link.start)) is None:
+            return False
+        if (end_type := pins.get(link.end)) is None:
+            return False
+
+        if link.start.node_id not in self.nodes:
+            return False
+        if link.end.node_id not in self.nodes:
+            return False
+
+        if not start_type.type == "output":
+            return False
+        if not end_type.type == "input":
+            return False
+
+        if not start_type.data == end_type.data:
+            return False
+
+        if link in links:
+            return False
+
+        return True
+
+    def _persist_params_if_changed(self, node: Node, prev_params: BaseModel):
+        if node.params == prev_params:
+            return
+
+        if (effect_node := self.persistence.get_effect_node(node.id)) is None:
+            print(f"Failed to update node {node.id}, it's missing")
+            return
+
+        effect_node.params = node.params.model_dump_json()
+        self.persistence.update_effect_node(effect_node)

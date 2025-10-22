@@ -15,6 +15,7 @@ runner_params.imgui_window_params.show_menu_view = False
 
 node_editor_config = ed.Config()
 node_editor_config.force_window_content_width_to_node_width = True
+node_editor_config.settings_file = ""
 
 addons_params = immapp.AddOnsParams()
 addons_params.with_node_editor_config = node_editor_config
