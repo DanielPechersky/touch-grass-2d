@@ -1,16 +1,25 @@
+import contextlib
 import traceback
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Mapping, Protocol, Self
 
 import numpy as np
-from imgui_bundle import imgui, imgui_ctx
+from imgui_bundle import imgui, imgui_ctx, implot
 from imgui_bundle import imgui_node_editor as ed
 from imgui_bundle import imgui_node_editor_ctx as ed_ctx
+from imgui_bundle.immapp import icons_fontawesome_6 as fa6
 
-from simulator.helpers import ChildrenTree, children_under_group, group_children
+from simulator.helpers import (
+    ChildrenTree,
+    children_under_group,
+    group_children,
+    ndarray_to_scatter_many,
+    point_to_ndarray,
+)
 from simulator.light_effect import (
     CattailContext,
     LightEffect,
+    PathLightEffect,
     ProjectileLightEffect,
     PulseLightEffect,
     TestLightEffect,
@@ -494,6 +503,200 @@ class PulseLightEffectNode(Node):
         return {self.output_pin: Brightness(brightness, indices)}
 
 
+class PathLightEffectNode(Node):
+    def __init__(self, id: int):
+        super().__init__(id)
+
+        self.input_pin = PinId(self.id, "input")
+        self.output_pin = PinId(self.id, "output")
+
+        # Start with no path - user must add points
+        self.path_points: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
+            np.zeros((0, 2), dtype=np.float32)
+        )  # type: ignore
+        self.projectile_speed = 1.0
+        self.num_bounces = 0
+        self.brightness_falloff = 1.0
+
+        self.effect: PathLightEffect | None = None
+        self.debug_gui_enabled = False
+        self.editing_path = False
+
+    def _rebuild_effect(self):
+        """Rebuild the light effect with current parameters."""
+        if len(self.path_points) < 2:
+            self.effect = None
+            return
+
+        params = PathLightEffect.Parameters(
+            path=self.path_points,
+            projectile_speed=self.projectile_speed,
+            num_bounces=self.num_bounces,
+            brightness_falloff=self.brightness_falloff,
+        )
+        self.effect = PathLightEffect(params)
+
+    def pins(self):
+        return {
+            self.input_pin: PinType("input", "scene_context"),
+            self.output_pin: PinType("output", "brightness"),
+        }
+
+    def gui(self, pin_ids) -> None:
+        imgui.text("Path Light Effect")
+
+        if self.editing_path:
+            button_text = f"{fa6.ICON_FA_PENCIL} Editing Path"
+            button_style = imgui_ctx.push_style_color(
+                imgui.Col_.button, imgui.ImVec4(0.2, 0.7, 0.2, 1.0)
+            )
+        else:
+            button_text = "Edit Path"
+            button_style = contextlib.nullcontext()
+
+        with button_style:
+            if imgui.button(f"{button_text}##{self.id}EditPath"):
+                self.editing_path = not self.editing_path
+
+        # Show status indicator
+        num_points = len(self.path_points)
+        if num_points < 2:
+            imgui.text_colored(
+                INVALID_INPUT_COLOR,
+                f"{INVALID_INPUT_SYMBOL} Path needs at least 2 points ({num_points}/2)",
+            )
+        else:
+            imgui.text(f"Path has {num_points} points")
+
+        if imgui.collapsing_header(f"Parameters##{self.id}Parameters"):
+            SLIDER_WIDTH = 150
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            changed, new_speed = imgui.slider_float(
+                f"Projectile Speed##{self.id}ProjectileSpeed",
+                self.projectile_speed,
+                0.0,
+                5.0,
+            )
+            if changed:
+                self.projectile_speed = new_speed
+                self._rebuild_effect()
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            changed, new_bounces = imgui.slider_int(
+                f"Num Bounces##{self.id}NumBounces",
+                self.num_bounces,
+                0,
+                10,
+            )
+            if changed:
+                self.num_bounces = new_bounces
+                self._rebuild_effect()
+
+            imgui.set_next_item_width(SLIDER_WIDTH)
+            changed, new_falloff = imgui.slider_float(
+                f"Brightness Falloff##{self.id}BrightnessFalloff",
+                self.brightness_falloff,
+                0.0,
+                5.0,
+            )
+            if changed:
+                self.brightness_falloff = new_falloff
+                self._rebuild_effect()
+
+        self.debug_gui_enabled = imgui.checkbox(
+            f"Debug GUI##{self.id}DebugGui",
+            self.debug_gui_enabled,
+        )[1]
+
+        draw_pins(pin_ids, self.pins())
+
+    def plot_gui(self) -> None:
+        if self.editing_path:
+            self._draw_path_editor()
+        elif self.debug_gui_enabled and self.effect is not None:
+            self.effect.debug_gui()
+
+    def _draw_path_editor(self) -> None:
+        """Interactive path editor within the plot."""
+
+        # Draw existing path as a line
+        if len(self.path_points) >= 2:
+            implot.plot_line(
+                f"path_{self.id}", *ndarray_to_scatter_many(self.path_points)
+            )
+
+        # Draw path points as editable markers
+        if len(self.path_points) > 0:
+            # Highlight differently when editing
+            marker_color = (
+                imgui.ImVec4(0.0, 1.0, 0.0, 1.0)
+                if self.editing_path
+                else imgui.ImVec4(1.0, 0.5, 0.0, 1.0)
+            )
+            implot.set_next_marker_style(size=10, fill=marker_color)
+            implot.plot_scatter(
+                f"path_points_{self.id}", *ndarray_to_scatter_many(self.path_points)
+            )
+
+        # Only handle user interaction if editing is enabled
+        if self.editing_path:
+            plot_hovered = implot.is_plot_hovered()
+
+            # Disable editing if clicking outside the plot area
+            if imgui.is_mouse_clicked(imgui.MouseButton_.left) and not plot_hovered:
+                self.editing_path = False
+
+            if plot_hovered:
+                mouse_pos = point_to_ndarray(implot.get_plot_mouse_pos())
+
+                # Left click to add point
+                if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+                    self.path_points = np.concatenate(
+                        [self.path_points, mouse_pos[np.newaxis, :]]
+                    )
+                    self._rebuild_effect()
+
+                # Right click to remove nearest point
+                elif imgui.is_mouse_clicked(imgui.MouseButton_.right):
+                    if len(self.path_points) > 0:
+                        # Find nearest point to mouse
+                        distances = np.linalg.norm(self.path_points - mouse_pos, axis=1)
+                        nearest_idx = int(np.argmin(distances))
+
+                        # Remove if within reasonable distance (e.g., 0.5 units)
+                        if distances[nearest_idx] < 0.5:
+                            self.path_points = np.delete(
+                                self.path_points, nearest_idx, axis=0
+                            )
+                            self._rebuild_effect()
+
+                # Show instructions as tooltip when editing and hovering
+                imgui.begin_tooltip()
+                imgui.text("Left Click: Add point")
+                imgui.text("Right Click: Remove nearest point")
+                imgui.text("Click outside plot to stop editing")
+                imgui.end_tooltip()
+
+    def run(self, inputs) -> dict[PinId, Any]:
+        context: SceneContext = inputs[self.input_pin]
+
+        if self.effect is None:
+            brightness = np.zeros((len(context.chains),), dtype=np.float32)
+        else:
+            brightness = self.effect.calculate_chain_brightness(
+                imgui.get_io().delta_time,
+                context.chains,
+                CattailContext(
+                    centers=context.cattail_centers(),
+                    accelerations=context.cattail_accelerations,
+                ),
+            )
+
+        indices = np.array([c.id for c in context.chains])
+        return {self.output_pin: Brightness(brightness, indices)}
+
+
 class FilterByGroupNode(Node):
     def __init__(self, id: int):
         super().__init__(id)
@@ -592,6 +795,7 @@ def addable_node_types(id: int) -> dict[str, Node]:
         "Dim": DimNode(id),
         "Filter by Group": FilterByGroupNode(id),
         "Pulse Light Effect": PulseLightEffectNode(id),
+        "Path Light Effect": PathLightEffectNode(id),
     }
 
 

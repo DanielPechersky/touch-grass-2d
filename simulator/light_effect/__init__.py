@@ -169,6 +169,170 @@ class ProjectilePhysics:
         implot.plot_scatter("projectiles", *ndarray_to_scatter_many(self.positions))
 
 
+class PathPhysics:
+    """
+    Physics system where projectiles follow a single predefined path at fixed speeds.
+    Projectiles can bounce a specified number of times before expiring.
+    """
+
+    def __init__(self, path: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]):
+        self.path = path
+        self.path_length = self._calculate_path_length()
+
+        # Per-projectile data
+        self.distances: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+        self.speeds: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )
+        self.directions: np.ndarray[tuple[int], np.dtype[np.floating]] = np.zeros(
+            (0,), dtype=np.float32
+        )  # 1.0 for forward, -1.0 for backward
+        self.num_bounces: np.ndarray[tuple[int], np.dtype[np.int32]] = np.zeros(
+            (0,), dtype=np.int32
+        )  # Maximum number of bounces allowed
+        self.bounce_count: np.ndarray[tuple[int], np.dtype[np.int32]] = np.zeros(
+            (0,), dtype=np.int32
+        )  # Current bounce count for each projectile
+
+        # Computed positions (cached for efficiency)
+        self.positions: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]] = (
+            np.zeros((0, 2), dtype=np.float32)
+        )  # type: ignore
+
+    def add_projectiles(
+        self,
+        starting_distances: np.ndarray[tuple[int], np.dtype[np.floating]],
+        speeds: np.ndarray[tuple[int], np.dtype[np.floating]],
+        num_bounces: np.ndarray[tuple[int], np.dtype[np.int32]],
+    ):
+        """Add new projectiles on the path.
+
+        Args:
+            starting_distances: Starting distance along path for each projectile
+            speeds: Speed for each projectile
+            num_bounces: Maximum number of bounces for each projectile (0 = no bounces)
+        """
+        num_new = len(starting_distances)
+        self.distances = np.concatenate((self.distances, starting_distances))
+        self.speeds = np.concatenate((self.speeds, speeds))
+        self.directions = np.concatenate(
+            (self.directions, np.ones((num_new,), dtype=np.float32))
+        )
+        self.num_bounces = np.concatenate((self.num_bounces, num_bounces))
+        self.bounce_count = np.concatenate(
+            (self.bounce_count, np.zeros((num_new,), dtype=np.int32))
+        )
+
+    def update(self, delta_time: float):
+        self.move_projectiles(delta_time)
+        self.update_positions()
+        self.expire_projectiles()
+
+    def move_projectiles(self, delta_time: float):
+        """Move projectiles along the path."""
+        self.distances += self.speeds * self.directions * delta_time
+
+        # Handle bouncing for each projectile
+        for i in range(len(self.distances)):
+            # Bounce logic: reverse direction when hitting either end
+            while self.distances[i] < 0 or self.distances[i] > self.path_length:
+                if self.distances[i] < 0:
+                    self.distances[i] = -self.distances[i]
+                    self.directions[i] *= -1
+                    self.bounce_count[i] += 1
+                elif self.distances[i] > self.path_length:
+                    self.distances[i] = 2 * self.path_length - self.distances[i]
+                    self.directions[i] *= -1
+                    self.bounce_count[i] += 1
+
+    def update_positions(self):
+        """Calculate 2D positions from distances along the path."""
+        if len(self.distances) == 0:
+            self.positions = np.zeros((0, 2), dtype=np.float32)  # type: ignore
+            return
+
+        positions = []
+        for i in range(len(self.distances)):
+            position = self._interpolate_position_on_path(self.distances[i])
+            positions.append(position)
+
+        self.positions = np.array(positions, dtype=np.float32)
+
+    def _calculate_path_length(self) -> float:
+        """Calculate the total length of the path."""
+        if len(self.path) < 2:
+            return 0.0
+        differences = np.diff(self.path, axis=0)
+        segment_lengths = np.linalg.norm(differences, axis=1)
+        return segment_lengths.sum()
+
+    def _interpolate_position_on_path(self, distance: float) -> np.ndarray:
+        """Get the 2D position at a given distance along the path."""
+        if len(self.path) == 0:
+            return np.array([0.0, 0.0], dtype=np.float32)
+
+        if distance <= 0:
+            return self.path[0].astype(np.float32)
+
+        # Calculate cumulative distances
+        differences = np.diff(self.path, axis=0)
+        segment_lengths = np.linalg.norm(differences, axis=1)
+        cumulative_distances = np.concatenate(([0], np.cumsum(segment_lengths)))
+
+        if distance >= self.path_length:
+            return self.path[-1].astype(np.float32)
+
+        # Find which segment we're on
+        segment_idx = np.searchsorted(cumulative_distances, distance, side="right") - 1
+
+        # Interpolate within the segment
+        segment_start_dist = cumulative_distances[segment_idx]
+        segment_length = segment_lengths[segment_idx]
+        if segment_length == 0:
+            return self.path[segment_idx].astype(np.float32)
+
+        t = (distance - segment_start_dist) / segment_length
+
+        return (
+            self.path[segment_idx]
+            + t * (self.path[segment_idx + 1] - self.path[segment_idx])
+        ).astype(np.float32)
+
+    def expire_projectiles(self):
+        """Remove projectiles that have exhausted their bounces."""
+        if len(self.distances) == 0:
+            return
+
+        # Start with all projectiles alive
+        alive_mask = np.ones(len(self.distances), dtype=bool)
+
+        # Expire projectiles that have exhausted bounces
+        for i in range(len(self.distances)):
+            if self.bounce_count[i] > self.num_bounces[i]:
+                alive_mask[i] = False
+
+        self.distances = self.distances[alive_mask]
+        self.speeds = self.speeds[alive_mask]
+        self.directions = self.directions[alive_mask]
+        self.num_bounces = self.num_bounces[alive_mask]
+        self.bounce_count = self.bounce_count[alive_mask]
+        self.positions = self.positions[alive_mask]
+
+    def debug_gui(self):
+        # Draw path
+        if len(self.path) > 0:
+            implot.plot_line("path", *ndarray_to_scatter_many(self.path))
+
+        # Draw projectiles
+        if len(self.positions) > 0:
+            implot.set_next_marker_style(size=7, fill=imgui.ImVec4(1, 0, 1, 1))
+            implot.plot_scatter(
+                "path_projectiles", *ndarray_to_scatter_many(self.positions)
+            )
+
+
 class AccelerationThresholdTrigger:
     def __init__(self, upper_threshold=0.6, lower_threshold=0.4):
         self.upper_threshold = upper_threshold
@@ -325,6 +489,80 @@ class PulseLightEffect(LightEffect):
 
     def debug_gui(self):
         self.pulse_physics.debug_gui()
+
+
+class PathLightEffect(LightEffect):
+    """
+    Light effect where projectiles follow a single predefined path.
+    When cattails trigger, projectiles are spawned on the path.
+    """
+
+    @dataclass
+    class Parameters:
+        path: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]
+        projectile_speed: float = 1.0
+        num_bounces: int = 0
+        brightness_falloff: float = 1.0
+
+    def __init__(self, params: Parameters):
+        self.trigger = AccelerationThresholdTrigger()
+        self.path_physics = PathPhysics(params.path)
+        self.params = params
+
+    def calculate_chain_brightness(
+        self,
+        delta_time,
+        chains,
+        cattail_context,
+    ):
+        triggered = self.trigger.check_triggers(cattail_context)
+
+        # Spawn projectiles on the path for each trigger
+        num_triggered = triggered.sum()
+        if num_triggered > 0:
+            self.path_physics.add_projectiles(
+                starting_distances=np.zeros((num_triggered,), dtype=np.float32),
+                speeds=np.full(
+                    (num_triggered,), self.params.projectile_speed, dtype=np.float32
+                ),
+                num_bounces=np.full(
+                    (num_triggered,), self.params.num_bounces, dtype=np.int32
+                ),
+            )
+
+        self.path_physics.update(delta_time)
+        return self.chain_brightness_from_projectiles(chains)
+
+    def chain_brightness_from_projectiles(
+        self,
+        chains: list[Chain],
+    ) -> np.ndarray[tuple[int], np.dtype[np.floating]]:
+        brightness = np.zeros((len(chains),), dtype=np.float32)
+
+        if len(self.path_physics.positions) == 0:
+            return brightness
+
+        chain_points: np.ndarray[tuple[int, int, Literal[2]], np.dtype[np.floating]] = (
+            np.stack([chain.points for chain in chains], dtype=np.float32)
+        )
+
+        # Calculate distances from all chain points to all projectiles
+        distances = np.linalg.vector_norm(
+            chain_points[:, :, np.newaxis, :]
+            - self.path_physics.positions[np.newaxis, np.newaxis, :, :],
+            axis=-1,
+        )
+
+        # Brightness based on minimum distance to any projectile
+        brightness = np.maximum(
+            0.0, 1.0 - distances.min(axis=1) * self.params.brightness_falloff
+        ).sum(axis=1)
+        brightness = np.clip(brightness, 0.0, 1.0)
+
+        return brightness
+
+    def debug_gui(self):
+        self.path_physics.debug_gui()
 
 
 def distances_from_circle(

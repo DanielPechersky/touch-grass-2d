@@ -8,6 +8,7 @@ runner_params.gui_function = Gui().gui
 runner_params.window_title = "Touch Grass 2D"
 runner_params.window_size = (1100, 650)
 runner_params = runner_params.to_runner_params()
+runner_params.callbacks.default_icon_font = hello_imgui.DefaultIconFont.font_awesome6
 runner_params.imgui_window_params.show_menu_bar = True
 runner_params.imgui_window_params.show_menu_app = False
 runner_params.imgui_window_params.show_menu_view = False

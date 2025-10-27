@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
 
+import imgui_bundle
 import numpy as np
 from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
 from PIL import Image
