@@ -3,9 +3,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
 
-import imgui_bundle
 import numpy as np
 from imgui_bundle import hello_imgui, imgui, imgui_ctx, implot, portable_file_dialogs
+from imgui_bundle.immapp import icons_fontawesome_6 as fa6
 from PIL import Image
 
 from simulator.chain_menu import chain_menu
@@ -139,18 +139,27 @@ class InProjectGui:
                 child_flags=imgui.ChildFlags_.borders | imgui.ChildFlags_.auto_resize_y,
             ):
                 imgui.separator_text("Tools")
-                if imgui.radio_button("View", isinstance(self.tool, Simulator)):
+                if imgui.radio_button(
+                    f"{fa6.ICON_FA_EYE} View", isinstance(self.tool, Simulator)
+                ):
                     self.tool.switched_away()
                     self.update_simulator()
                     self.tool = self.simulator
-                if imgui.radio_button("Move", isinstance(self.tool, MoveTool)):
+                if imgui.radio_button(
+                    f"{fa6.ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT} Move",
+                    isinstance(self.tool, MoveTool),
+                ):
                     self.tool.switched_away()
                     self.tool = self.move_tool
-                if imgui.radio_button("Place chain", isinstance(self.tool, ChainTool)):
+                if imgui.radio_button(
+                    f"{fa6.ICON_FA_WHEAT_AWN} Place chain",
+                    isinstance(self.tool, ChainTool),
+                ):
                     self.tool.switched_away()
                     self.tool = self.chain_tool
                 if imgui.radio_button(
-                    "Place cattail", isinstance(self.tool, CattailPlacer)
+                    f"{fa6.ICON_FA_TOWER_BROADCAST} Place cattail",
+                    isinstance(self.tool, CattailPlacer),
                 ):
                     self.tool.switched_away()
                     self.tool = self.cattail_placer
