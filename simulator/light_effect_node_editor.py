@@ -163,6 +163,10 @@ def draw_pins(pin_ids: Callable[[PinId], ed.PinId], pins: dict[PinId, PinType]) 
         draw_pin(pin_ids, pin_id, pins[pin_id])
 
 
+INVALID_INPUT_COLOR = imgui.ImVec4(1.0, 0.5, 0.0, 1.0)
+INVALID_INPUT_SYMBOL = fa6.ICON_FA_TRIANGLE_EXCLAMATION
+
+
 class Node:
     def __init__(self, id: int):
         self.id = id
@@ -724,9 +728,14 @@ class FilterByGroupNode(Node):
         if set:
             self.group_id = value
         if not self.is_group_id_format_valid:
-            imgui.text_colored(imgui.ImVec4(1, 0, 0, 1), "Invalid group ID")
+            imgui.text_colored(
+                INVALID_INPUT_COLOR,
+                f"{INVALID_INPUT_SYMBOL} Invalid group ID (must start with 'g_')",
+            )
         elif self.group_id_not_found:
-            imgui.text_colored(imgui.ImVec4(1, 0, 0, 1), "Group ID not found")
+            imgui.text_colored(
+                INVALID_INPUT_COLOR, f"{INVALID_INPUT_SYMBOL} Group ID not found"
+            )
         self.filter_chains = imgui.checkbox(
             f"Filter Chains##{self.id}Filter Chains", self.filter_chains
         )[1]
