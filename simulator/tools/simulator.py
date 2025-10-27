@@ -57,7 +57,6 @@ class Simulator(Tool):
                 groups=self.groups,
                 cattail_accelerations=accelerations,
             )
-            self.editor.plot_gui()
             chain_brightness = self.editor.execute(context)
             if chain_brightness is None:
                 chain_brightness = np.zeros((len(self.chains),), dtype=np.float32)
@@ -74,6 +73,7 @@ class Simulator(Tool):
                     "chain_brightness",
                     *ndarray_to_scatter_many(chain.points),
                 )
+            self.editor.plot_gui()
         except Exception:
             print("Error in light effect")
             traceback.print_exc()
