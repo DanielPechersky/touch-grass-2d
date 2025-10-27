@@ -96,7 +96,6 @@ class Simulator(Tool):
 
     def switched_away(self):
         self.cattail_physics.reset()
-        self.editor = Editor()
         hello_imgui_set_idling(True)
 
 
