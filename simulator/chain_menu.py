@@ -1,6 +1,7 @@
 from typing import Generator
 
-from imgui_bundle import imgui
+from imgui_bundle import imgui, imgui_ctx
+from imgui_bundle.immapp import icons_fontawesome_6 as fa6
 
 from simulator.helpers import ChildrenTree, group_children
 from simulator.persistence import Cattail, Chain, Group, Persistence
@@ -52,7 +53,8 @@ class ChainMenu:
 
     def render_group(self, group: Group[int] | None, selectable_idx=0) -> int:
         group_id = group.id if group else None
-        display = f"{group.external_id}" if group else "Root"
+        name = group.external_id if group else "Root"
+        display = f"{fa6.ICON_FA_LAYER_GROUP} {name}"
 
         if group is None:
             imgui.set_next_item_open(True, imgui.Cond_.always)
@@ -121,9 +123,21 @@ class ChainMenu:
 
                 case Cattail() | Chain() as child:
                     set_next_item_selection()
-                    imgui.selectable(
-                        f"{child.external_id}", id_for_item(child) in self.selection
-                    )
+                    match child:
+                        case Chain():
+                            icon = fa6.ICON_FA_WHEAT_AWN
+                            color = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
+                        case Cattail():
+                            icon = fa6.ICON_FA_TOWER_BROADCAST
+                            color = imgui.ImVec4(1.0, 0.7, 0.0, 1.0)
+                    with imgui_ctx.push_style_color(
+                        imgui.Col_.text,
+                        color,
+                    ):
+                        imgui.selectable(
+                            f"{icon} {child.external_id}",
+                            id_for_item(child) in self.selection,
+                        )
                     if imgui.begin_drag_drop_source():
                         imgui.set_drag_drop_payload_py_id("selection_id", 0)
                         imgui.text(f"Dragging {len(self.selection)} items")
