@@ -120,18 +120,18 @@ class Link:
 def draw_pin_text(type: PinType) -> None:
     match type.data:
         case "brightness":
-            symbol = "B"
+            symbol = fa6.ICON_FA_LIGHTBULB
             color = imgui.ImVec4(1.0, 1.0, 0.0, 1.0)
             hover_text = "Brightness Values"
         case "scene_context":
-            symbol = "C"
+            symbol = fa6.ICON_FA_SQUARE
             color = imgui.ImVec4(1.0, 0.0, 0.0, 1.0)
             hover_text = "Scene Context (Cattails, Chains, and Groups)"
     match type.type:
         case "input":
-            text = f"-> {symbol}"
+            text = f"{fa6.ICON_FA_ARROW_RIGHT_LONG} {symbol}"
         case "output":
-            text = f"{symbol} ->"
+            text = f"{symbol} {fa6.ICON_FA_ARROW_RIGHT_LONG}"
     imgui.text_colored(color, text)
     if imgui.is_item_hovered():
         imgui.set_tooltip(hover_text)
@@ -157,7 +157,7 @@ def draw_pins(pin_ids: Callable[[PinId], ed.PinId], pins: dict[PinId, PinType]) 
     for pin_id in input_pins:
         draw_pin(pin_ids, pin_id, pins[pin_id])
 
-    imgui.same_line()
+    imgui.same_line(0, 30)
 
     for pin_id in output_pins:
         draw_pin(pin_ids, pin_id, pins[pin_id])
@@ -209,6 +209,7 @@ class SourceNode(Node):
 
     def gui(self, pin_ids):
         imgui.text("Source")
+        imgui.new_line()
         draw_pins(pin_ids, self.pins())
 
     def run(self, inputs) -> dict[PinId, Any]:
