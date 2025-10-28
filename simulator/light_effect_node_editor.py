@@ -440,7 +440,7 @@ class PulseLightEffectNode(Node):
     def gui(self, pin_ids) -> None:
         imgui.text("Pulse Light Effect")
 
-        if imgui.collapsing_header("Parameters"):
+        if imgui.collapsing_header(f"Parameters##{self.id}Parameters"):
             SLIDER_WIDTH = 150
 
             imgui.set_next_item_width(SLIDER_WIDTH)
