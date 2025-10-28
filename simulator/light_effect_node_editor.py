@@ -581,7 +581,7 @@ class PathLightEffectNode(Node):
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
 
-        self.effect: PathLightEffect | None = None
+        self.effect: PathLightEffect = PathLightEffect(self.effect_params)
         self.debug_gui_enabled = False
         self.editing_path = False
 
@@ -593,19 +593,13 @@ class PathLightEffectNode(Node):
     def path(self, value: np.ndarray[tuple[int, Literal[2]], np.dtype[np.floating]]):
         self.params.path = Points(value)
 
-    def _rebuild_effect(self):
-        """Rebuild the light effect with current parameters."""
-        if len(self.path) < 2:
-            self.effect = None
-            return
-
-        self.effect = PathLightEffect(
-            PathLightEffect.Parameters(
-                path=self.path,
-                projectile_speed=self.params.projectile_speed,
-                num_bounces=self.params.num_bounces,
-                brightness_falloff=self.params.brightness_falloff,
-            )
+    @property
+    def effect_params(self):
+        return PathLightEffect.Parameters(
+            path=self.path,
+            projectile_speed=self.params.projectile_speed,
+            num_bounces=self.params.num_bounces,
+            brightness_falloff=self.params.brightness_falloff,
         )
 
     def pins(self):
@@ -644,37 +638,28 @@ class PathLightEffectNode(Node):
             SLIDER_WIDTH = 150
 
             imgui.set_next_item_width(SLIDER_WIDTH)
-            changed, new_speed = imgui.slider_float(
+            self.params.projectile_speed = imgui.slider_float(
                 f"Projectile Speed##{self.id}ProjectileSpeed",
                 self.params.projectile_speed,
                 0.0,
                 5.0,
-            )
-            if changed:
-                self.params.projectile_speed = new_speed
-                self._rebuild_effect()
+            )[1]
 
             imgui.set_next_item_width(SLIDER_WIDTH)
-            changed, new_bounces = imgui.slider_int(
+            self.params.num_bounces = imgui.slider_int(
                 f"Num Bounces##{self.id}NumBounces",
                 self.params.num_bounces,
                 0,
                 10,
-            )
-            if changed:
-                self.params.num_bounces = new_bounces
-                self._rebuild_effect()
+            )[1]
 
             imgui.set_next_item_width(SLIDER_WIDTH)
-            changed, new_falloff = imgui.slider_float(
+            self.params.brightness_falloff = imgui.slider_float(
                 f"Brightness Falloff##{self.id}BrightnessFalloff",
                 self.params.brightness_falloff,
                 0.0,
                 5.0,
-            )
-            if changed:
-                self.params.brightness_falloff = new_falloff
-                self._rebuild_effect()
+            )[1]
 
         self.debug_gui_enabled = imgui.checkbox(
             f"Debug GUI##{self.id}DebugGui",
@@ -721,7 +706,6 @@ class PathLightEffectNode(Node):
                 # Left click to add point
                 if imgui.is_mouse_clicked(imgui.MouseButton_.left):
                     self.path = np.concatenate([self.path, mouse_pos[np.newaxis, :]])
-                    self._rebuild_effect()
 
                 # Right click to remove nearest point
                 elif imgui.is_mouse_clicked(imgui.MouseButton_.right):
@@ -733,7 +717,6 @@ class PathLightEffectNode(Node):
                         # Remove if within reasonable distance (e.g., 0.5 units)
                         if distances[nearest_idx] < 0.5:
                             self.path = np.delete(self.path, nearest_idx, axis=0)
-                            self._rebuild_effect()
 
                 # Show instructions as tooltip when editing and hovering
                 imgui.begin_tooltip()
@@ -743,6 +726,8 @@ class PathLightEffectNode(Node):
                 imgui.end_tooltip()
 
     def run(self, inputs) -> dict[PinId, Any]:
+        self.effect.params = self.effect_params
+
         context: SceneContext = inputs[self.input_pin]
 
         if self.effect is None:

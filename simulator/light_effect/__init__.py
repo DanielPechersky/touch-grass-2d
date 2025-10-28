@@ -515,6 +515,8 @@ class PathLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
+        self._reset_physics_if_path_changed()
+
         triggered = self.trigger.check_triggers(cattail_context)
 
         # Spawn projectiles on the path for each trigger
@@ -532,6 +534,10 @@ class PathLightEffect(LightEffect):
 
         self.path_physics.update(delta_time)
         return self.chain_brightness_from_projectiles(chains)
+
+    def _reset_physics_if_path_changed(self):
+        if not np.array_equal(self.params.path, self.path_physics.path):
+            self.path_physics = PathPhysics(self.params.path)
 
     def chain_brightness_from_projectiles(
         self,
