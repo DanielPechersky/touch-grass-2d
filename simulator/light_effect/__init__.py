@@ -375,6 +375,9 @@ class ProjectileLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
+        if len(chains) == 0:
+            return np.zeros((0,), dtype=np.float32)
+
         triggered = self.trigger.check_triggers(cattail_context)
 
         relevant_accelerations = cattail_context.accelerations[triggered]
@@ -446,6 +449,9 @@ class PulseLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
+        if len(chains) == 0:
+            return np.zeros((0,), dtype=np.float32)
+
         triggered = self.trigger.check_triggers(cattail_context)
 
         projectile_centers = cattail_context.centers[triggered]
@@ -515,6 +521,9 @@ class PathLightEffect(LightEffect):
         chains,
         cattail_context,
     ):
+        if len(chains) == 0:
+            return np.zeros((0,), dtype=np.float32)
+
         self._reset_physics_if_path_changed()
 
         triggered = self.trigger.check_triggers(cattail_context)
