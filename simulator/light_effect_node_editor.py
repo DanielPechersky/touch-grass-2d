@@ -329,8 +329,12 @@ class InvertNode(Node):
         return {self.output_pin: brightness}
 
 
+class DimNodeParams(BaseModel):
+    brightness: float = 0.5
+
+
 class DimNode(Node):
-    Params = EmptyParams
+    Params = DimNodeParams
 
     def __init__(self, id: int):
         self.id = id
@@ -338,7 +342,6 @@ class DimNode(Node):
 
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
-        self.brightness = 0.5
 
     def pins(self):
         return {
@@ -349,17 +352,15 @@ class DimNode(Node):
     def gui(self, pin_ids) -> None:
         imgui.text("Dim")
         imgui.set_next_item_width(100)
-        set, value = imgui.slider_float(
-            f"##{self.id}Brightness", self.brightness, 0.0, 1.0
-        )
-        if set:
-            self.brightness = value
+        self.params.brightness = imgui.slider_float(
+            f"##{self.id}Brightness", self.params.brightness, 0.0, 1.0
+        )[1]
 
         draw_pins(pin_ids, self.pins())
 
     def run(self, inputs) -> dict[PinId, Any]:
         brightness: Brightness = inputs[self.input_pin]
-        brightness.values *= self.brightness
+        brightness.values *= self.params.brightness
         return {self.output_pin: brightness}
 
 
