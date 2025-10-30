@@ -19,11 +19,9 @@ from simulator.helpers import (
 )
 from simulator.light_effect import (
     CattailContext,
-    LightEffect,
     PathLightEffect,
     ProjectileLightEffect,
     PulseLightEffect,
-    TestLightEffect,
 )
 from simulator.persistence import (
     Cattail,
@@ -365,7 +363,7 @@ class DimNode(Node):
         return {self.output_pin: brightness}
 
 
-class LightEffectNode(Node):
+class ProjectileLightEffectNode(Node):
     Params = EmptyParams
 
     def __init__(self, id: int):
@@ -375,8 +373,7 @@ class LightEffectNode(Node):
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
 
-        self.selected_light_effect_name = None
-        self.selected_light_effect: LightEffect | None = None
+        self.light_effect: ProjectileLightEffect = ProjectileLightEffect()
         self.debug_gui_enabled = False
 
     def pins(self):
@@ -385,46 +382,28 @@ class LightEffectNode(Node):
             self.output_pin: PinType("output", "brightness"),
         }
 
-    @property
-    def light_effects(self):
-        return {
-            "Projectile": ProjectileLightEffect(),
-            "Test": TestLightEffect(),
-        }
-
     def gui(self, pin_ids) -> None:
-        imgui.text("Light Effect")
-        for name in self.light_effects.keys():
-            if imgui.radio_button(
-                f"{name}##{self.id}{name}", self.selected_light_effect_name == name
-            ):
-                self.selected_light_effect_name = name
-                self.selected_light_effect = self.light_effects[name]
-        set, value = imgui.checkbox(
+        imgui.text("Projectile Light Effect")
+        self.debug_gui_enabled = imgui.checkbox(
             f"Debug GUI##{self.id}Debug Gui",
             self.debug_gui_enabled,
-        )
-        if set:
-            self.debug_gui_enabled = value
+        )[1]
         draw_pins(pin_ids, self.pins())
 
     def plot_gui(self) -> None:
-        if self.debug_gui_enabled and self.selected_light_effect is not None:
-            self.selected_light_effect.debug_gui()
+        if self.debug_gui_enabled:
+            self.light_effect.debug_gui()
 
     def run(self, inputs) -> dict[PinId, Any]:
         context: SceneContext = inputs[self.input_pin]
-        if self.selected_light_effect is None:
-            brightness = np.zeros((len(context.chains),), dtype=np.float32)
-        else:
-            brightness = self.selected_light_effect.calculate_chain_brightness(
-                imgui.get_io().delta_time,
-                context.chains,
-                CattailContext(
-                    centers=context.cattail_centers(),
-                    accelerations=context.cattail_accelerations,
-                ),
-            )
+        brightness = self.light_effect.calculate_chain_brightness(
+            imgui.get_io().delta_time,
+            context.chains,
+            CattailContext(
+                centers=context.cattail_centers(),
+                accelerations=context.cattail_accelerations,
+            ),
+        )
         indices = np.array([c.id for c in context.chains])
         return {self.output_pin: Brightness(brightness, indices)}
 
@@ -850,7 +829,7 @@ def node_types() -> dict[str, type[Node]]:
         "Destination": DestinationNode,
         "AlwaysBright": AlwaysBrightNode,
         "Invert": InvertNode,
-        "LightEffect": LightEffectNode,
+        "ProjectileLightEffect": ProjectileLightEffectNode,
         "Dim": DimNode,
         "FilterByGroup": FilterByGroupNode,
         "PulseLightEffect": PulseLightEffectNode,
@@ -864,11 +843,11 @@ def node_display_names() -> dict[str, str]:
         "Destination": "Destination",
         "AlwaysBright": "Always Bright",
         "Invert": "Invert",
-        "LightEffect": "Light Effect",
         "Dim": "Dim",
         "FilterByGroup": "Filter by Group",
         "PulseLightEffect": "Pulse Light Effect",
         "PathLightEffect": "Path Light Effect",
+        "ProjectileLightEffect": "Projectile Light Effect",
     }
 
 
