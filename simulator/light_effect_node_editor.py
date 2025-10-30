@@ -726,8 +726,14 @@ class PathLightEffectNode(Node):
         return {self.output_pin: Brightness(brightness, indices)}
 
 
+class FilterByGroupNodeParams(BaseModel):
+    group_id: str = ""
+    filter_chains: bool = True
+    filter_cattails: bool = True
+
+
 class FilterByGroupNode(Node):
-    Params = EmptyParams
+    Params = FilterByGroupNodeParams
 
     def __init__(self, id: int):
         self.id = id
@@ -736,11 +742,7 @@ class FilterByGroupNode(Node):
         self.input_pin = PinId(self.id, "input")
         self.output_pin = PinId(self.id, "output")
 
-        self.group_id: str = ""
         self.group_id_not_found = False
-
-        self.filter_chains = True
-        self.filter_cattails = True
 
     def pins(self):
         return {
@@ -751,9 +753,9 @@ class FilterByGroupNode(Node):
     def gui(self, pin_ids):
         imgui.text("Filter By Group")
         imgui.set_next_item_width(50)
-        set, value = imgui.input_text(f"Group ID##{self.id}Group ID", self.group_id)
-        if set:
-            self.group_id = value
+        self.params.group_id = imgui.input_text(
+            f"Group ID##{self.id}Group ID", self.params.group_id
+        )[1]
         if not self.is_group_id_format_valid:
             imgui.text_colored(
                 INVALID_INPUT_COLOR,
@@ -763,11 +765,11 @@ class FilterByGroupNode(Node):
             imgui.text_colored(
                 INVALID_INPUT_COLOR, f"{INVALID_INPUT_SYMBOL} Group ID not found"
             )
-        self.filter_chains = imgui.checkbox(
-            f"Filter Chains##{self.id}Filter Chains", self.filter_chains
+        self.params.filter_chains = imgui.checkbox(
+            f"Filter Chains##{self.id}Filter Chains", self.params.filter_chains
         )[1]
-        self.filter_cattails = imgui.checkbox(
-            f"Filter Cattails##{self.id}Filter Cattails", self.filter_cattails
+        self.params.filter_cattails = imgui.checkbox(
+            f"Filter Cattails##{self.id}Filter Cattails", self.params.filter_cattails
         )[1]
 
         draw_pins(pin_ids, self.pins())
@@ -778,10 +780,10 @@ class FilterByGroupNode(Node):
 
     @property
     def parsed_group_id(self) -> int | None:
-        if not self.group_id.startswith("g_"):
+        if not self.params.group_id.startswith("g_"):
             return None
         try:
-            return int(self.group_id[2:])
+            return int(self.params.group_id[2:])
         except ValueError:
             return None
 
@@ -795,8 +797,8 @@ class FilterByGroupNode(Node):
             self.group_id_not_found = False
             scene_context = scene_context.scoped_to_group(
                 group_id,
-                filter_chains=self.filter_chains,
-                filter_cattails=self.filter_cattails,
+                filter_chains=self.params.filter_chains,
+                filter_cattails=self.params.filter_cattails,
             )
         return {self.output_pin: scene_context}
 
